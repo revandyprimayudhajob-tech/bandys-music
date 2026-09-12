@@ -424,16 +424,9 @@ export const usePlayerStore = defineStore('player', {
 
         async playTrack(track, list = null) {
             this.initYouTubeEngine();
-
-            // Stop native audio engine jika sedang memutar lagu sebelumnya
-            if (this.audioEngine) {
-                this.audioEngine.pause();
-                this.audioEngine.removeAttribute('src');
-                this.audioEngine.load();
-            }
+            this.initAudioEngine();
 
             // Reset state lagu
-            this.playbackMode = 'youtube';
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
@@ -441,7 +434,6 @@ export const usePlayerStore = defineStore('player', {
             this.playlist = [track];
             this.currentIndex = 0;
             this.shouldRefreshRelated = true;
-            this.playCount++;
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
 
@@ -452,52 +444,68 @@ export const usePlayerStore = defineStore('player', {
             // Fetch rekomendasi terkait untuk lagu yang baru dipilih
             this.fetchRelatedRecommendations(track, true);
 
+            // TRIK UTAMA: Ambil direct stream audio agar 100% jalan di background & lockscreen notification
+            try {
+                const res = await fetch(`/api/stream/${track.id}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl) {
+                    this.playDirectAudioStream(data.streamUrl, data.duration);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Direct stream fetch fallback to YouTube iframe:', e);
+            }
+
+            // Fallback ke YouTube IFrame jika stream direct gagal
+            this.playbackMode = 'youtube';
             const playInternal = () => {
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.playbackMode = 'youtube';
                     this.ytPlayer.loadVideoById(track.id);
                     this.ytPlayer.playVideo();
                 } else {
                     setTimeout(playInternal, 200);
                 }
             };
-
             playInternal();
         },
 
-        playTrackFromQueue(track, index) {
+        async playTrackFromQueue(track, index) {
             this.initYouTubeEngine();
+            this.initAudioEngine();
 
-            // Stop native audio engine jika sedang memutar lagu sebelumnya
-            if (this.audioEngine) {
-                this.audioEngine.pause();
-                this.audioEngine.removeAttribute('src');
-                this.audioEngine.load();
-            }
-
-            this.playbackMode = 'youtube';
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
             this.currentIndex = index;
             this.shouldRefreshRelated = false;
-            this.playCount++;
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
             this.isLoading = true;
             this.addToHistory(track);
             this.updateMediaSession(track);
 
+            // TRIK UTAMA: Ambil direct stream audio
+            try {
+                const res = await fetch(`/api/stream/${track.id}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl) {
+                    this.playDirectAudioStream(data.streamUrl, data.duration);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Queue direct stream fetch fallback to YouTube iframe:', e);
+            }
+
+            // Fallback ke YouTube IFrame
+            this.playbackMode = 'youtube';
             const playInternal = () => {
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.playbackMode = 'youtube';
                     this.ytPlayer.loadVideoById(track.id);
                     this.ytPlayer.playVideo();
                 } else {
                     setTimeout(playInternal, 200);
                 }
             };
-
             playInternal();
         },
 
@@ -667,27 +675,19 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        playTrackFromRecommendations(track) {
+        async playTrackFromRecommendations(track) {
             const current = this.currentTrack;
             if (current && current.id !== track.id) {
                 this.previousTracks.push(current);
             }
 
             this.initYouTubeEngine();
+            this.initAudioEngine();
 
-            // Stop native audio engine jika sebelumnya memutar via direct audio
-            if (this.audioEngine) {
-                this.audioEngine.pause();
-                this.audioEngine.removeAttribute('src');
-                this.audioEngine.load();
-            }
-
-            this.playbackMode = 'youtube';
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
             this.shouldRefreshRelated = false; // Jaga agar rekomendasi TIDAK diacak ulang
-            this.playCount++;
             this.isLoading = true;
             this.addToHistory(track);
             this.updateMediaSession(track);
@@ -702,9 +702,21 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
+            // TRIK UTAMA: Direct Audio Stream
+            try {
+                const res = await fetch(`/api/stream/${track.id}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl) {
+                    this.playDirectAudioStream(data.streamUrl, data.duration);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Recommendation stream fetch fallback to YouTube iframe:', e);
+            }
+
+            this.playbackMode = 'youtube';
             const playInternal = () => {
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.playbackMode = 'youtube';
                     this.ytPlayer.loadVideoById(track.id);
                     this.ytPlayer.playVideo();
                 } else {
