@@ -6,6 +6,34 @@ import SongCard from '@/Components/SongCard.vue';
 const player = usePlayerStore();
 const track = computed(() => player.currentTrack);
 
+// Compute High-Definition Thumbnail (maxresdefault / sddefault fallback)
+const highResThumbnail = computed(() => {
+    if (!track.value) return '';
+    if (track.value.id) {
+        return `https://i.ytimg.com/vi/${track.value.id}/maxresdefault.jpg`;
+    }
+    if (track.value.thumbnail) {
+        return track.value.thumbnail.replace('hqdefault.jpg', 'maxresdefault.jpg').replace('mqdefault.jpg', 'maxresdefault.jpg');
+    }
+    return '';
+});
+
+const onImageError = (e) => {
+    if (!track.value) return;
+    const currentSrc = e.target.src;
+    const id = track.value.id;
+    if (currentSrc.includes('maxresdefault.jpg')) {
+        // Fallback 1: sddefault (Standard Definition)
+        e.target.src = `https://i.ytimg.com/vi/${id}/sddefault.jpg`;
+    } else if (currentSrc.includes('sddefault.jpg')) {
+        // Fallback 2: hqdefault (High Quality default)
+        e.target.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+    } else if (track.value.thumbnail && currentSrc !== track.value.thumbnail) {
+        // Fallback 3: original track thumbnail
+        e.target.src = track.value.thumbnail;
+    }
+};
+
 // Tabs: 'player' (disc), 'queue' (Berikutnya), 'lyrics' (Lirik), 'related' (Terkait)
 const activeTab = ref('player');
 const hasLyrics = ref(true);
@@ -270,19 +298,19 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
         <!-- Dynamic Middle Area: Disc OR Tab Content with Smooth Transition -->
         <div class="flex-1 flex flex-col justify-center my-3 min-h-0 overflow-hidden relative">
             <Transition name="tab-fade" mode="out-in">
-                <!-- 1. Modern Square Cover Art Mode (Default) -->
-                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-4">
-                    <div class="w-60 h-60 sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 relative group">
-                        <!-- Ambient Glow behind artwork -->
-                        <div class="absolute -inset-1.5 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-xl opacity-70 group-hover:opacity-100 transition duration-500"></div>
+                <!-- 1. Modern High Definition Square Cover Art Mode (Default) -->
+                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-2 sm:py-4">
+                    <div class="w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 max-w-[86vw] max-h-[42vh] aspect-square relative group">
+                        <!-- Ambient Dynamic Glow behind artwork -->
+                        <div class="absolute -inset-2 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500"></div>
                         
                         <!-- Square Artwork Container -->
-                        <div class="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#13172c] border border-white/15 shadow-2xl shadow-purple-950/60 flex items-center justify-center">
+                        <div class="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#13172c] border border-white/20 shadow-2xl shadow-black/80 flex items-center justify-center">
                             <img 
-                                :src="track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
+                                :src="highResThumbnail || track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
                                 alt="Cover Art" 
-                                @error="(e) => { e.target.src = `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`; }"
-                                class="w-full h-full object-cover select-none transition-transform duration-700 ease-out"
+                                @error="onImageError"
+                                class="w-full h-full object-cover select-none transition-all duration-700 ease-out"
                                 :class="player.isPlaying ? 'scale-100' : 'scale-95 opacity-90'"
                             />
                             
