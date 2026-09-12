@@ -270,21 +270,24 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
         <!-- Dynamic Middle Area: Disc OR Tab Content with Smooth Transition -->
         <div class="flex-1 flex flex-col justify-center my-3 min-h-0 overflow-hidden relative">
             <Transition name="tab-fade" mode="out-in">
-                <!-- 1. Vinyl Disc Mode (Default) -->
+                <!-- 1. Modern Square Cover Art Mode (Default) -->
                 <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-4">
-                    <div 
-                        class="w-56 h-56 sm:w-68 sm:h-68 md:w-80 md:h-80 lg:w-96 lg:h-96 rounded-full relative p-2 sm:p-3 bg-[#13172c] border-4 sm:border-8 border-slate-700/50 shadow-2xl shadow-purple-900/50 flex items-center justify-center transition-all animate-spin-slow"
-                        :class="player.isPlaying ? 'animate-spin-running' : 'animate-spin-pause'"
-                    >
-                        <img 
-                            :src="track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
-                            alt="Cover Art" 
-                            @error="(e) => { e.target.src = `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`; }"
-                            class="w-full h-full object-cover rounded-full shadow-inner"
-                        />
-                        <!-- Center spindle hole -->
-                        <div class="absolute w-12 h-12 sm:w-16 sm:h-16 bg-[#07080f] rounded-full border-4 border-white/20 shadow-inner flex items-center justify-center">
-                            <div class="w-3 h-3 sm:w-4 sm:h-4 bg-white/40 rounded-full"></div>
+                    <div class="w-60 h-60 sm:w-72 sm:h-72 md:w-80 md:h-80 lg:w-96 lg:h-96 relative group">
+                        <!-- Ambient Glow behind artwork -->
+                        <div class="absolute -inset-1.5 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-xl opacity-70 group-hover:opacity-100 transition duration-500"></div>
+                        
+                        <!-- Square Artwork Container -->
+                        <div class="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#13172c] border border-white/15 shadow-2xl shadow-purple-950/60 flex items-center justify-center">
+                            <img 
+                                :src="track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
+                                alt="Cover Art" 
+                                @error="(e) => { e.target.src = `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`; }"
+                                class="w-full h-full object-cover select-none transition-transform duration-700 ease-out"
+                                :class="player.isPlaying ? 'scale-100' : 'scale-95 opacity-90'"
+                            />
+                            
+                            <!-- Subtle overlay gradient -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 pointer-events-none"></div>
                         </div>
                     </div>
                 </div>
