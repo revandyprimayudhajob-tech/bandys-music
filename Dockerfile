@@ -12,7 +12,8 @@ RUN apk add --no-cache \
     npm \
     python3 \
     py3-pip \
-    ffmpeg
+    ffmpeg \
+    sqlite
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql bcmath
@@ -28,14 +29,25 @@ WORKDIR /app
 # Copy application files
 COPY . .
 
+# Set environment variables for production runtime
+ENV APP_NAME="Bandy's Music"
+ENV APP_ENV=production
+ENV APP_KEY="base64:YiBXQk7ssKH4KR9pmOQSfxmuMj/ufbmVwqVq595R/AI="
+ENV APP_DEBUG=true
+ENV DB_CONNECTION=sqlite
+ENV DB_DATABASE=/app/database/database.sqlite
+ENV SESSION_DRIVER=file
+ENV CACHE_STORE=file
+
 # Install dependencies and build assets
 RUN composer install --no-dev --optimize-autoloader
 RUN npm install
 RUN npm run build
 
-# Generate app key if needed and set permissions
-RUN chmod -R 777 storage bootstrap/cache
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
+RUN chmod -R 777 /app/storage /app/bootstrap/cache
 
 EXPOSE 8000
 
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+CMD ["/app/entrypoint.sh"]
