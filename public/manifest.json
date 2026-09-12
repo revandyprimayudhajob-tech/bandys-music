@@ -1,0 +1,27 @@
+{
+  "name": "Bandy's Music",
+  "short_name": "Bandy's",
+  "id": "com.bandys.music",
+  "description": "Personal YouTube Music Player for Bandy",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
+  "background_color": "#0a0c16",
+  "theme_color": "#0a0c16",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

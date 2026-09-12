@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0a0c16;
+    color: #f8fafc;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Glassmorphism & Custom Animations */
+.glass-panel {
+  background: rgba(19, 23, 40, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.gradient-brand {
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #f43f5e 100%);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, #c084fc 0%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 20s linear infinite;
+}
+
+.animate-spin-pause {
+  animation-play-state: paused;
+}
+
+.animate-spin-running {
+  animation-play-state: running;
+}
+
+/* Smooth Tab Fade & Scale Transition */
+.tab-fade-enter-active,
+.tab-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tab-fade-enter-from {
+  opacity: 0;
+  transform: scale(0.94) translateY(8px);
+}
+
+.tab-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.94) translateY(-8px);
+}
+
+/* Dynamic Equalizer Bar Animations */
+@keyframes eqDance1 {
+  0%, 100% { height: 4px; transform: scaleY(0.4); }
+  50% { height: 18px; transform: scaleY(1.2); }
+}
+
+@keyframes eqDance2 {
+  0%, 100% { height: 18px; transform: scaleY(1.1); }
+  50% { height: 6px; transform: scaleY(0.3); }
+}
+
+@keyframes eqDance3 {
+  0%, 100% { height: 8px; transform: scaleY(0.6); }
+  50% { height: 20px; transform: scaleY(1.3); }
+}
+
+.animate-eq-1 {
+  animation: eqDance1 0.65s ease-in-out infinite alternate;
+}
+
+.animate-eq-2 {
+  animation: eqDance2 0.5s ease-in-out infinite alternate;
+}
+
+.animate-eq-3 {
+  animation: eqDance3 0.75s ease-in-out infinite alternate;
+}
