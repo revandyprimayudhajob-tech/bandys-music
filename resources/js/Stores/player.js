@@ -162,7 +162,7 @@ export const usePlayerStore = defineStore('player', {
         },
 
         playSilentAudioBridge() {
-            if (this.silentAudio && this.playbackMode === 'youtube') {
+            if (this.silentAudio) {
                 this.silentAudio.play().catch(() => {});
             }
         },
@@ -196,17 +196,11 @@ export const usePlayerStore = defineStore('player', {
 
             document.addEventListener('visibilitychange', () => {
                 if (document.visibilityState === 'hidden') {
-                    // Ketika user beralih ke aplikasi lain atau mematikan layar HP
+                    // Ketika user beralih ke aplikasi lain (Home) atau mematikan layar HP
                     if (this.isPlaying) {
-                        if (this.playbackMode === 'youtube') {
-                            this.playSilentAudioBridge();
-                            if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                                setTimeout(() => {
-                                    if (this.isPlaying && this.playbackMode === 'youtube') {
-                                        this.ytPlayer.playVideo();
-                                    }
-                                }, 100);
-                            }
+                        this.playSilentAudioBridge();
+                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                            this.ytPlayer.playVideo();
                         } else if (this.playbackMode === 'audio' && this.audioEngine) {
                             this.audioEngine.play().catch(() => {});
                         }
@@ -422,11 +416,13 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        async playTrack(track, list = null) {
+        playTrack(track, list = null) {
             this.initYouTubeEngine();
             this.initAudioEngine();
+            this.initBackgroundAudioBridge();
+            this.playSilentAudioBridge();
 
-            // Reset state lagu
+            // 1. INSTANT STATE UPDATE (0.001 detik langsung aktif di UI)
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
@@ -436,43 +432,30 @@ export const usePlayerStore = defineStore('player', {
             this.shouldRefreshRelated = true;
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
+            this.isPlaying = true;
+            this.isLoading = false;
 
-            this.isLoading = true;
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // Fetch rekomendasi terkait untuk lagu yang baru dipilih
-            this.fetchRelatedRecommendations(track, true);
-
-            // TRIK UTAMA: Ambil direct stream audio agar 100% jalan di background & lockscreen notification
-            try {
-                const res = await fetch(`/api/stream/${track.id}`);
-                const data = await res.json();
-                if (data && data.success && data.streamUrl) {
-                    this.playDirectAudioStream(data.streamUrl, data.duration);
-                    return;
-                }
-            } catch (e) {
-                console.warn('Direct stream fetch fallback to YouTube iframe:', e);
+            // 2. Langsung eksekusi pemutar YouTube secara instan tanpa menunggu fetch apapun
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
             }
 
-            // Fallback ke YouTube IFrame jika stream direct gagal
-            this.playbackMode = 'youtube';
-            const playInternal = () => {
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    setTimeout(playInternal, 200);
-                }
-            };
-            playInternal();
+            // 3. Background fetch rekomendasi & audio bridge secara paralel
+            this.fetchRelatedRecommendations(track, true);
         },
 
-        async playTrackFromQueue(track, index) {
+        playTrackFromQueue(track, index) {
             this.initYouTubeEngine();
             this.initAudioEngine();
+            this.initBackgroundAudioBridge();
+            this.playSilentAudioBridge();
 
+            // 1. INSTANT STATE UPDATE (0.001 detik langsung pindah)
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
@@ -480,33 +463,18 @@ export const usePlayerStore = defineStore('player', {
             this.shouldRefreshRelated = false;
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
-            this.isLoading = true;
+            this.isPlaying = true;
+            this.isLoading = false;
+
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // TRIK UTAMA: Ambil direct stream audio
-            try {
-                const res = await fetch(`/api/stream/${track.id}`);
-                const data = await res.json();
-                if (data && data.success && data.streamUrl) {
-                    this.playDirectAudioStream(data.streamUrl, data.duration);
-                    return;
-                }
-            } catch (e) {
-                console.warn('Queue direct stream fetch fallback to YouTube iframe:', e);
-            }
-
-            // Fallback ke YouTube IFrame
+            // 2. Langsung eksekusi pemutar YouTube secara instan
             this.playbackMode = 'youtube';
-            const playInternal = () => {
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    setTimeout(playInternal, 200);
-                }
-            };
-            playInternal();
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
+            }
         },
 
         togglePlay(forceState) {
@@ -675,7 +643,7 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        async playTrackFromRecommendations(track) {
+        playTrackFromRecommendations(track) {
             const current = this.currentTrack;
             if (current && current.id !== track.id) {
                 this.previousTracks.push(current);
@@ -683,12 +651,19 @@ export const usePlayerStore = defineStore('player', {
 
             this.initYouTubeEngine();
             this.initAudioEngine();
+            this.initBackgroundAudioBridge();
+            this.playSilentAudioBridge();
 
+            // 1. INSTANT STATE UPDATE
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
-            this.shouldRefreshRelated = false; // Jaga agar rekomendasi TIDAK diacak ulang
-            this.isLoading = true;
+            this.shouldRefreshRelated = false;
+            this.fallbackRetries = 0;
+            this.triedAlternativeIds = [track.id];
+            this.isPlaying = true;
+            this.isLoading = false;
+
             this.addToHistory(track);
             this.updateMediaSession(track);
 
@@ -697,33 +672,16 @@ export const usePlayerStore = defineStore('player', {
             if (existingIdx >= 0) {
                 this.currentIndex = existingIdx;
             } else {
-                // Masukkan ke akhir antrean yang sudah ada
                 this.playlist.push(track);
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // TRIK UTAMA: Direct Audio Stream
-            try {
-                const res = await fetch(`/api/stream/${track.id}`);
-                const data = await res.json();
-                if (data && data.success && data.streamUrl) {
-                    this.playDirectAudioStream(data.streamUrl, data.duration);
-                    return;
-                }
-            } catch (e) {
-                console.warn('Recommendation stream fetch fallback to YouTube iframe:', e);
-            }
-
+            // 2. Langsung eksekusi pemutar YouTube secara instan
             this.playbackMode = 'youtube';
-            const playInternal = () => {
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    setTimeout(playInternal, 200);
-                }
-            };
-            playInternal();
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
+            }
         },
 
         async fetchMoreRadioTracks() {
