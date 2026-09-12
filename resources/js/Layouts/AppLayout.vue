@@ -162,6 +162,9 @@ onMounted(() => {
     loadUser();
     document.addEventListener('click', handleOutsideClick);
 
+    // Warm up engines immediately so first song plays in 0.01s
+    player.initYouTubeEngine();
+
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt.value = e;
