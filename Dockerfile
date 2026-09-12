@@ -44,10 +44,12 @@ RUN composer install --no-dev --optimize-autoloader
 RUN npm install
 RUN npm run build
 
-# Make entrypoint script executable
-RUN chmod +x /app/entrypoint.sh
-RUN chmod -R 777 /app/storage /app/bootstrap/cache
+# Make entrypoint script executable and setup directories
+RUN mkdir -p database storage/logs storage/framework/views storage/framework/cache storage/framework/sessions bootstrap/cache
+RUN touch database/database.sqlite
+RUN chmod -R 777 storage bootstrap/cache database
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["/app/entrypoint.sh"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"]
