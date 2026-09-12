@@ -894,7 +894,18 @@ export const usePlayerStore = defineStore('player', {
         },
 
         updateMediaSession(track) {
-            if (!track || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+            if (!track) return;
+
+            // Trigger Native Android Foreground Service if running inside Capacitor Android APK
+            try {
+                if (typeof window !== 'undefined' && window.BandysNativeBridge && typeof window.BandysNativeBridge.startForegroundPlayback === 'function') {
+                    window.BandysNativeBridge.startForegroundPlayback(track.title || "Bandy's Music", track.artist || "Bandy's Stream");
+                }
+            } catch (e) {
+                console.warn('Native foreground bridge error:', e);
+            }
+
+            if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 
             const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
             navigator.mediaSession.metadata = new MediaMetadata({
