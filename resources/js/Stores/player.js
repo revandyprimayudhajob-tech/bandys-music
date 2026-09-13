@@ -23,6 +23,8 @@ export const usePlayerStore = defineStore('player', {
         shouldRefreshRelated: true, // Flag kontrol apakah rekomendasi perlu di-fetch ulang atau dipertahankan
         progressTimer: null,
         playbackMode: 'youtube', // 'youtube' | 'audio'
+        currentStreamUrl: null,
+        currentStreamDuration: 0,
         audioEngine: null,
         fallbackRetries: 0,
         triedAlternativeIds: [],
@@ -248,15 +250,13 @@ export const usePlayerStore = defineStore('player', {
                     // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
                     if (!this.isUserPaused && this.isPlaying) {
                         this.playSilentAudioBridge();
-                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                        
+                        // Jika stream URL sudah siap, beralih ke Native Android Service untuk background playback tanpa jeda
+                        if (this.currentStreamUrl && this.playbackMode !== 'audio') {
+                            const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
+                            this.playDirectAudioStream(this.currentStreamUrl, this.currentStreamDuration || this.duration, currentPos);
+                        } else if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
-                            setTimeout(() => {
-                                if (!this.isUserPaused && this.isPlaying && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                                    this.ytPlayer.playVideo();
-                                }
-                            }, 300);
-                        } else if (this.playbackMode === 'audio' && this.audioEngine) {
-                            this.audioEngine.play().catch(() => {});
                         }
                     }
                 } else {
@@ -465,9 +465,16 @@ export const usePlayerStore = defineStore('player', {
                 const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
                 const data = await res.json();
                 if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
-                    const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
+                    const streamUrl = data.streamUrl.startsWith('http') ? data.streamUrl : `${window.location.origin}${data.streamUrl}`;
                     const dur = data.duration || this.duration;
-                    this.playDirectAudioStream(data.streamUrl, dur, currentPos);
+                    this.currentStreamUrl = streamUrl;
+                    this.currentStreamDuration = dur;
+
+                    // Jika user saat ini sedang di luar aplikasi (latar belakang), langsung aktifkan native stream
+                    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && this.isPlaying && !this.isUserPaused) {
+                        const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
+                        this.playDirectAudioStream(streamUrl, dur, currentPos);
+                    }
                 }
             } catch (e) {
                 console.warn('Direct audio stream fetch note:', e);
