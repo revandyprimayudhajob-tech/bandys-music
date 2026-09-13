@@ -4,6 +4,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import { usePlayerStore } from '@/Stores/player';
 import MiniPlayer from '@/Components/MiniPlayer.vue';
 import FullscreenPlayer from '@/Components/FullscreenPlayer.vue';
+import SplashIntro from '@/Components/SplashIntro.vue';
 
 const player = usePlayerStore();
 const page = usePage();
@@ -183,6 +184,9 @@ onUnmounted(() => {
 </script>
 
 <template>
+    <!-- Beautiful Animated Splash & Loading Intro -->
+    <SplashIntro />
+
     <div class="relative min-h-screen w-full max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col bg-[#0a0c16] overflow-hidden pb-32 transition-all duration-300 shadow-2xl md:border-x md:border-white/5">
         <!-- Ambient Glow FX -->
         <div class="fixed top-[-10%] left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[80px] pointer-events-none -z-0"></div>
