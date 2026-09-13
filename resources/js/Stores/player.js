@@ -252,19 +252,13 @@ export const usePlayerStore = defineStore('player', {
                     // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
                     if (!this.isUserPaused && this.isPlaying) {
                         this.playSilentAudioBridge();
-                        
-                        // Ambil posisi detik secara real-time dari YouTube player atau state aktif
-                        let currentPos = this.currentTime;
-                        if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
-                            const ytSec = this.ytPlayer.getCurrentTime();
-                            if (ytSec > 0) currentPos = ytSec;
-                        }
-                        
-                        // Jika stream URL sudah siap, beralih ke Native Android Service untuk background playback tanpa jeda
-                        if (this.currentStreamUrl && this.playbackMode !== 'audio') {
-                            this.playDirectAudioStream(this.currentStreamUrl, this.currentStreamDuration || this.duration, currentPos);
-                        } else if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
+                            setTimeout(() => {
+                                if (!this.isUserPaused && this.isPlaying && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                                    this.ytPlayer.playVideo();
+                                }
+                            }, 150);
                         }
                     }
                 } else {
@@ -272,8 +266,6 @@ export const usePlayerStore = defineStore('player', {
                     if (!this.isUserPaused && this.isPlaying) {
                         if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
-                        } else if (this.playbackMode === 'audio' && this.audioEngine) {
-                            this.audioEngine.play().catch(() => {});
                         }
                     }
                 }
@@ -527,41 +519,13 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        async loadAndPlayTrack(track) {
-            if (!track || !track.id) return;
-            const targetId = track.id;
-            try {
-                const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
-                const data = await res.json();
-                if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
-                    const streamUrl = data.streamUrl.startsWith('http') ? data.streamUrl : `${window.location.origin}${data.streamUrl}`;
-                    const dur = data.duration || this.duration;
-                    this.currentStreamUrl = streamUrl;
-                    this.currentStreamDuration = dur;
-                    this.playDirectAudioStream(streamUrl, dur, 0);
-                    return;
-                }
-            } catch (e) {
-                console.warn('Stream fetch note, falling back to YouTube:', e);
-            }
-
-            // Fallback to YouTube IFrame if stream is unavailable
-            if (this.currentTrack?.id === targetId) {
-                this.playbackMode = 'youtube';
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(targetId);
-                    this.ytPlayer.playVideo();
-                }
-            }
-        },
-
         playTrack(track, list = null) {
             this.initYouTubeEngine();
             this.initAudioEngine();
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
-            // 1. INSTANT STATE UPDATE (0.001 detik langsung aktif di UI)
+            // 1. INSTANT STATE UPDATE (0.001 detik langsung responsif tanpa delay)
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
@@ -572,15 +536,19 @@ export const usePlayerStore = defineStore('player', {
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
-            this.isLoading = true;
+            this.isLoading = false;
             this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
             this.fetchRelatedRecommendations(track, true);
 
-            // 2. Putar langsung dengan single engine yang konsisten
-            this.loadAndPlayTrack(track);
+            // 2. Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
+            }
         },
 
         playTrackFromQueue(track, index) {
@@ -589,7 +557,7 @@ export const usePlayerStore = defineStore('player', {
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
-            // 1. INSTANT STATE UPDATE (0.001 detik langsung pindah)
+            // 1. INSTANT STATE UPDATE (0.001 detik langsung pindah tanpa delay)
             this.currentTime = 0;
             this.duration = 0;
             this.progress = 0;
@@ -598,14 +566,18 @@ export const usePlayerStore = defineStore('player', {
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
-            this.isLoading = true;
+            this.isLoading = false;
             this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // 2. Putar langsung dengan single engine yang konsisten
-            this.loadAndPlayTrack(track);
+            // 2. Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
+            }
         },
 
         togglePlay(forceState) {
