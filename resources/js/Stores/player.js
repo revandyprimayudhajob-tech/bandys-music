@@ -88,6 +88,12 @@ export const usePlayerStore = defineStore('player', {
                         const pct = Math.max(0, Math.min(100, (sec / this.duration) * 100));
                         this.seek(pct);
                     }
+                } else if (action === 'sync_pos') {
+                    if (typeof value === 'number' && this.duration > 0) {
+                        const sec = value / 1000;
+                        this.currentTime = sec;
+                        this.progress = Math.max(0, Math.min(100, (sec / this.duration) * 100));
+                    }
                 }
             };
         },
@@ -411,6 +417,24 @@ export const usePlayerStore = defineStore('player', {
             }
             this.pauseSilentAudioBridge();
 
+            // 1. Jika berjalan di Native Android APK -> serahkan audio decoding 100% ke Android MediaPlayer Foreground Service!
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                const track = this.currentTrack;
+                const title = track?.title || "Bandy's Music";
+                const artist = track?.artist || "Bandy's Stream";
+                const thumb = track?.thumbnail || (track?.id ? `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg` : "");
+                const dur = duration || this.duration || 0;
+                
+                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, dur, startPosition);
+                this.isPlaying = true;
+                this.isLoading = false;
+                if (duration) this.duration = duration;
+                if (startPosition > 0) this.currentTime = startPosition;
+                this.updateMediaSession(track);
+                return;
+            }
+
+            // 2. Web Browser fallback
             if (this.audioEngine) {
                 this.audioEngine.src = streamUrl;
                 if (startPosition > 0) {
@@ -587,6 +611,18 @@ export const usePlayerStore = defineStore('player', {
 
             const targetPlaying = forceState !== undefined ? forceState : !this.isPlaying;
             this.isUserPaused = !targetPlaying;
+
+            // Native Android Bridge Handling
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio && window.BandysNativeBridge?.resumeNativeAudio) {
+                if (targetPlaying) {
+                    window.BandysNativeBridge.resumeNativeAudio();
+                    this.isPlaying = true;
+                } else {
+                    window.BandysNativeBridge.pauseNativeAudio();
+                    this.isPlaying = false;
+                }
+                return;
+            }
 
             if (this.playbackMode === 'audio' && this.audioEngine) {
                 if (targetPlaying) {
@@ -862,6 +898,15 @@ export const usePlayerStore = defineStore('player', {
             this.progress = pct;
 
             let dur = this.duration || 0;
+
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.seekNativeAudio) {
+                if (dur > 0) {
+                    const targetSecs = (pct / 100) * dur;
+                    this.currentTime = targetSecs;
+                    window.BandysNativeBridge.seekNativeAudio(targetSecs);
+                }
+                return;
+            }
 
             if (this.playbackMode === 'audio' && this.audioEngine) {
                 if (this.audioEngine.duration && !isNaN(this.audioEngine.duration)) {
