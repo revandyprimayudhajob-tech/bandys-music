@@ -280,7 +280,7 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
 
 <template>
     <div 
-        class="fixed inset-0 w-full max-w-md md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto bg-[#0a0c16] z-50 flex flex-col justify-between p-4 sm:p-6 md:p-8 transition-transform duration-500 ease-out md:border-x md:border-white/10 shadow-2xl"
+        class="fixed inset-0 w-full max-w-md md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto bg-[#0a0c16] z-50 flex flex-col justify-between px-4 pt-3 pb-8 sm:px-6 sm:pt-4 sm:pb-10 md:p-8 transition-transform duration-500 ease-out md:border-x md:border-white/10 shadow-2xl"
         :class="player.isFullPlayerOpen && track ? 'translate-y-0' : 'translate-y-full pointer-events-none'"
     >
         <!-- Modal Top Bar -->
@@ -296,11 +296,11 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
         </div>
 
         <!-- Dynamic Middle Area: Disc OR Tab Content with Smooth Transition -->
-        <div class="flex-1 flex flex-col justify-center my-3 min-h-0 overflow-hidden relative">
+        <div class="flex-1 flex flex-col justify-center my-2 min-h-0 overflow-hidden relative">
             <Transition name="tab-fade" mode="out-in">
                 <!-- 1. Modern High Definition Square Cover Art Mode (Default) -->
-                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-2 sm:py-4">
-                    <div class="w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 max-w-[86vw] max-h-[42vh] aspect-square relative group">
+                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-1 sm:py-3">
+                    <div class="w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 max-w-[82vw] max-h-[35vh] sm:max-h-[40vh] aspect-square relative group">
                         <!-- Ambient Dynamic Glow behind artwork -->
                         <div class="absolute -inset-2 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500"></div>
                         
