@@ -88,26 +88,29 @@ class MusicController extends Controller
 
     public function stream(string $videoId): JsonResponse
     {
-        $pythonScript = base_path('app/Services/yt_bridge.py');
-        $pythonBinary = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
-        $command = $pythonBinary . " " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId) . " 2>&1";
-        $output = shell_exec($command);
-        
-        // Extract JSON if warnings exist
-        $jsonStart = strpos($output, '{');
-        if ($jsonStart !== false) {
-            $output = substr($output, $jsonStart);
-        }
-        
-        $result = json_decode($output, true);
+        $cacheKey = 'yt_stream_' . $videoId;
+        $streamData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 10800, function () use ($videoId) {
+            $pythonScript = base_path('app/Services/yt_bridge.py');
+            $pythonBinary = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+            $command = $pythonBinary . " " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId) . " 2>&1";
+            $output = shell_exec($command);
+            
+            $jsonStart = strpos($output, '{');
+            if ($jsonStart !== false) {
+                $output = substr($output, $jsonStart);
+            }
+            
+            return json_decode($output, true);
+        });
 
-        if (!empty($result['streamUrl'])) {
+        if (!empty($streamData['streamUrl'])) {
             return response()->json([
                 'success' => true,
-                'streamUrl' => $result['streamUrl'],
-                'title' => $result['title'] ?? '',
-                'artist' => $result['artist'] ?? '',
-                'duration' => $result['duration'] ?? 0,
+                'streamUrl' => url('/api/stream/audio/' . $videoId),
+                'directUrl' => $streamData['streamUrl'],
+                'title' => $streamData['title'] ?? '',
+                'artist' => $streamData['artist'] ?? '',
+                'duration' => $streamData['duration'] ?? 0,
             ]);
         }
 
@@ -115,5 +118,66 @@ class MusicController extends Controller
             'success' => false,
             'message' => 'Direct stream could not be resolved'
         ], 404);
+    }
+
+    public function streamAudio(string $videoId, Request $request)
+    {
+        $cacheKey = 'yt_stream_' . $videoId;
+        $streamData = \Illuminate\Support\Facades\Cache::get($cacheKey);
+
+        if (empty($streamData['streamUrl'])) {
+            $pythonScript = base_path('app/Services/yt_bridge.py');
+            $pythonBinary = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+            $command = $pythonBinary . " " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId) . " 2>&1";
+            $output = shell_exec($command);
+            $jsonStart = strpos($output, '{');
+            if ($jsonStart !== false) {
+                $output = substr($output, $jsonStart);
+            }
+            $streamData = json_decode($output, true);
+            if (!empty($streamData['streamUrl'])) {
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $streamData, 10800);
+            }
+        }
+
+        if (empty($streamData['streamUrl'])) {
+            return response('Stream not found', 404);
+        }
+
+        $targetUrl = $streamData['streamUrl'];
+        $rangeHeader = $request->header('Range');
+
+        $headers = [
+            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        ];
+        if ($rangeHeader) {
+            $headers['Range'] = $rangeHeader;
+        }
+
+        return response()->stream(function () use ($targetUrl, $headers) {
+            $ctx = stream_context_create([
+                'http' => [
+                    'header' => implode("\r\n", array_map(fn($k, $v) => "$k: $v", array_keys($headers), $headers)),
+                    'timeout' => 30,
+                    'follow_location' => 1,
+                ],
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                ]
+            ]);
+            $fp = @fopen($targetUrl, 'rb', false, $ctx);
+            if ($fp) {
+                while (!feof($fp)) {
+                    echo fread($fp, 65536);
+                    flush();
+                }
+                fclose($fp);
+            }
+        }, 200, [
+            'Content-Type' => 'audio/mp4',
+            'Accept-Ranges' => 'bytes',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 }

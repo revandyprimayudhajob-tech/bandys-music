@@ -307,15 +307,15 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
                         <!-- Square Artwork Container -->
                         <div class="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#13172c] border border-white/20 shadow-2xl shadow-black/80 flex items-center justify-center">
                             <img 
-                                :src="highResThumbnail || track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
+                                :src="track?.thumbnail || highResThumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
                                 alt="Cover Art" 
                                 @error="onImageError"
-                                class="w-full h-full object-cover select-none transition-all duration-500 ease-out scale-100"
+                                class="w-full h-full object-cover select-none transition-all duration-500 ease-out scale-[1.18]"
                                 :class="player.isPlaying ? 'opacity-100' : 'opacity-90'"
                             />
                             
                             <!-- Subtle overlay gradient -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 pointer-events-none"></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 pointer-events-none"></div>
                         </div>
                     </div>
                 </div>

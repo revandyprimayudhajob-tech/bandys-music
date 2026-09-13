@@ -14,4 +14,5 @@ Route::get('/api/lyrics', [MusicController::class, 'lyrics'])->name('api.lyrics'
 Route::get('/api/related', [MusicController::class, 'related'])->name('api.related');
 Route::get('/api/alternative', [MusicController::class, 'alternative'])->name('api.alternative');
 Route::get('/api/stream/{videoId}', [MusicController::class, 'stream'])->name('api.stream');
+Route::get('/api/stream/audio/{videoId}', [MusicController::class, 'streamAudio'])->name('api.stream.audio');
 

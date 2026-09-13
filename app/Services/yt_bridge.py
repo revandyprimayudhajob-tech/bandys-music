@@ -29,22 +29,29 @@ def stream(video_id):
     ydl_opts = {
         'format': 'bestaudio[ext=m4a]/bestaudio/best',
         'quiet': True,
-        'skip_download': True
+        'skip_download': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web', 'mweb']}}
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        audio_url = info.get('url')
-        if not audio_url:
-            formats = info.get('formats', [])
-            audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-            if audio_formats:
-                audio_url = audio_formats[-1]['url']
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            audio_url = info.get('url')
+            if not audio_url:
+                formats = info.get('formats', [])
+                audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
+                if audio_formats:
+                    audio_url = audio_formats[-1]['url']
+            return {
+                "streamUrl": audio_url,
+                "title": info.get("title"),
+                "artist": info.get("uploader"),
+                "thumbnail": info.get("thumbnail"),
+                "duration": info.get("duration")
+            }
+    except Exception as e:
         return {
-            "streamUrl": audio_url,
-            "title": info.get("title"),
-            "artist": info.get("uploader"),
-            "thumbnail": info.get("thumbnail"),
-            "duration": info.get("duration")
+            "streamUrl": None,
+            "error": str(e)
         }
 
 if __name__ == "__main__":
