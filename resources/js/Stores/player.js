@@ -78,9 +78,17 @@ export const usePlayerStore = defineStore('player', {
 
             window.BandysNativeBridgeListener = (action, value) => {
                 if (action === 'play') {
-                    this.togglePlay(true);
+                    this.isPlaying = true;
+                    this.isUserPaused = false;
+                    if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                        try { this.ytPlayer.playVideo(); } catch (e) {}
+                    }
                 } else if (action === 'pause') {
-                    this.togglePlay(false);
+                    this.isPlaying = false;
+                    this.isUserPaused = true;
+                    if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                        try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                    }
                 } else if (action === 'next') {
                     this.nextTrack();
                 } else if (action === 'previous') {
