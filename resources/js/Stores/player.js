@@ -823,7 +823,19 @@ export const usePlayerStore = defineStore('player', {
         prevTrack() {
             this.initYouTubeEngine();
 
-            // 1. Jika antrean memiliki lagu dan kita berada di indeks > 0 (misal lagu ke-2 "Teh Hijau", mundur ke lagu ke-1 "Bukti")
+            // Aturan Standar Pemutar Musik Dunia (Spotify / Apple Music / YouTube Music):
+            // Jika lagu sudah berjalan lebih dari 3 detik (misal di menit 1:25),
+            // tekan Back/Prev akan MENGULANG LAGU DARI DETIK 0:00.
+            // Jika ditekan di detik awal (<= 3 detik), baru mundur ke lagu sebelumnya!
+            if (this.currentTime > 3) {
+                this.seek(0);
+                if (!this.isPlaying) {
+                    this.togglePlay(true);
+                }
+                return;
+            }
+
+            // 1. Jika antrean memiliki lagu dan kita berada di indeks > 0 (misal lagu ke-2, mundur ke lagu ke-1)
             if (this.playlist.length > 1 && this.currentIndex > 0) {
                 const prevIdx = this.currentIndex - 1;
                 const prevSong = this.playlist[prevIdx];
@@ -847,15 +859,10 @@ export const usePlayerStore = defineStore('player', {
                 }
             }
 
-            // 3. Jika ini lagu pertama (First chosen song / index 0), ulangi dari detik 0:00
-            this.currentTime = 0;
-            this.progress = 0;
-            if (this.playbackMode === 'audio' && this.audioEngine) {
-                this.audioEngine.currentTime = 0;
-                this.audioEngine.play().catch(() => {});
-            } else if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
-                this.ytPlayer.seekTo(0, true);
-                this.ytPlayer.playVideo();
+            // 3. Jika ini lagu pertama di daftar, ulangi dari detik 0:00
+            this.seek(0);
+            if (!this.isPlaying) {
+                this.togglePlay(true);
             }
         },
 
