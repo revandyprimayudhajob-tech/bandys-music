@@ -293,6 +293,11 @@ export const usePlayerStore = defineStore('player', {
                             this.isLoading = false;
                             this.playSilentAudioBridge();
                             this.acquireWakeLock();
+                            const dur = this.ytPlayer.getDuration() || 0;
+                            if (dur > 0) {
+                                this.duration = dur;
+                            }
+                            this.updateMediaSession(this.currentTrack);
                             if ('mediaSession' in navigator) {
                                 navigator.mediaSession.playbackState = 'playing';
                             }
