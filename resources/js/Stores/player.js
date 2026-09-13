@@ -251,14 +251,28 @@ export const usePlayerStore = defineStore('player', {
                 if (document.visibilityState === 'hidden') {
                     // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
                     if (!this.isUserPaused && this.isPlaying) {
-                        this.playSilentAudioBridge();
-                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                            this.ytPlayer.playVideo();
-                            setTimeout(() => {
-                                if (!this.isUserPaused && this.isPlaying && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                                    this.ytPlayer.playVideo();
-                                }
-                            }, 150);
+                        let currentPos = this.currentTime;
+                        if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+                            const ytSec = this.ytPlayer.getCurrentTime();
+                            if (ytSec > 0) currentPos = ytSec;
+                        }
+
+                        // Jika berjalan di Android APK & stream URL siap -> serahkan audio ke Native Android Foreground Service
+                        if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream && this.currentStreamUrl) {
+                            this.playbackMode = 'audio';
+                            if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                                try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                            }
+                            const track = this.currentTrack;
+                            const title = track?.title || "Bandy's Music";
+                            const artist = track?.artist || "Bandy's Stream";
+                            const thumb = track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`;
+                            window.BandysNativeBridge.playNativeStream(this.currentStreamUrl, title, artist, thumb, this.currentStreamDuration || this.duration, currentPos);
+                        } else {
+                            this.playSilentAudioBridge();
+                            if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                                this.ytPlayer.playVideo();
+                            }
                         }
                     }
                 } else {
@@ -549,6 +563,25 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
             }
+
+            // 3. Precache direct stream secara senyap di background untuk persiapan background playback
+            this.precacheStream(track);
+        },
+
+        async precacheStream(track) {
+            if (!track || !track.id) return;
+            const targetId = track.id;
+            try {
+                const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
+                    const streamUrl = data.streamUrl.startsWith('http') ? data.streamUrl : `${window.location.origin}${data.streamUrl}`;
+                    this.currentStreamUrl = streamUrl;
+                    this.currentStreamDuration = data.duration || this.duration;
+                }
+            } catch (e) {
+                console.warn('Precache stream note:', e);
+            }
         },
 
         playTrackFromQueue(track, index) {
@@ -578,6 +611,9 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
             }
+
+            // 3. Precache direct stream secara senyap di background
+            this.precacheStream(track);
         },
 
         togglePlay(forceState) {
