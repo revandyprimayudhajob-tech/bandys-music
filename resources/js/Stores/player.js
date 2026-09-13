@@ -33,6 +33,7 @@ export const usePlayerStore = defineStore('player', {
         isVisibilityGuarded: false,
         isUserPaused: false,
         pendingTrackId: null,
+        lastPrevTime: 0,
     }),
     getters: {
         currentTrack(state) {
@@ -76,7 +77,7 @@ export const usePlayerStore = defineStore('player', {
             if (typeof window === 'undefined' || window._bandysBridgeInitialized) return;
             window._bandysBridgeInitialized = true;
 
-            window.BandysNativeBridgeListener = (action, value) => {
+            window.BandysNativeBridgeListener = (action, val1, val2) => {
                 if (action === 'play') {
                     this.isPlaying = true;
                     this.isUserPaused = false;
@@ -94,17 +95,19 @@ export const usePlayerStore = defineStore('player', {
                 } else if (action === 'previous') {
                     this.prevTrack();
                 } else if (action === 'seek') {
-                    if (this.duration > 0 && typeof value === 'number') {
-                        const sec = value / 1000;
+                    if (typeof val1 === 'number' && this.duration > 0) {
+                        const sec = val1 / 1000;
                         const pct = Math.max(0, Math.min(100, (sec / this.duration) * 100));
                         this.seek(pct);
                     }
                 } else if (action === 'sync_pos') {
-                    if (this.playbackMode === 'audio' && typeof value === 'number' && this.duration > 0) {
-                        const sec = value / 1000;
-                        if (sec > 0 || this.currentTime < 2) {
-                            this.currentTime = sec;
-                            this.progress = Math.max(0, Math.min(100, (sec / this.duration) * 100));
+                    if (this.playbackMode === 'audio' && typeof val1 === 'number') {
+                        const sec = val1 / 1000;
+                        const dur = (typeof val2 === 'number' && val2 > 0) ? (val2 / 1000) : this.duration;
+                        this.currentTime = sec;
+                        if (dur > 0) {
+                            this.duration = dur;
+                            this.progress = Math.max(0, Math.min(100, (sec / dur) * 100));
                         }
                     }
                 }
@@ -257,50 +260,19 @@ export const usePlayerStore = defineStore('player', {
             this.isVisibilityGuarded = true;
 
             const handleVisibilityChange = () => {
+                // Di aplikasi Android APK native, ExoPlayer berjalan terus secara independen di Foreground Service tanpa putus
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                    return;
+                }
+
                 if (document.visibilityState === 'hidden') {
-                    // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
-                    if (!this.isUserPaused && this.isPlaying && this.currentTrack) {
-                        let currentPos = this.currentTime;
-                        if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
-                            const ytSec = this.ytPlayer.getCurrentTime();
-                            if (ytSec > 0) currentPos = ytSec;
-                        }
-
-                        // Stream URL: gunakan proxy audio stream agar tidak terkena 403 Google CDN
-                        const streamUrl = `${window.location.origin}/api/stream/audio/${this.currentTrack.id}`;
-
-                        // Jika berjalan di Android APK -> serahkan audio ke Native Android Foreground Service
-                        if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
-                            this.playbackMode = 'audio';
-                            if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                                try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                            }
-                            const track = this.currentTrack;
-                            const title = track?.title || "Bandy's Music";
-                            const artist = track?.artist || "Bandy's Stream";
-                            const thumb = track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`;
-                            window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, this.currentStreamDuration || this.duration, currentPos);
-                        } else {
-                            this.playSilentAudioBridge();
-                            if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                                this.ytPlayer.playVideo();
-                            }
-                        }
+                    this.playSilentAudioBridge();
+                    if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function' && !this.isUserPaused) {
+                        this.ytPlayer.playVideo();
                     }
                 } else {
-                    // Ketika user kembali ke dalam aplikasi (foreground)
                     if (!this.isUserPaused && this.isPlaying) {
-                        if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                            // Hentikan native audio dan lanjutkan dengan YouTube player di detik yang sama
-                            window.BandysNativeBridge.stopNativeAudio();
-                            this.playbackMode = 'youtube';
-                            if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
-                                try {
-                                    this.ytPlayer.seekTo(this.currentTime, true);
-                                    this.ytPlayer.playVideo();
-                                } catch (e) {}
-                            }
-                        } else if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
                         }
                     }
@@ -584,27 +556,20 @@ export const usePlayerStore = defineStore('player', {
             this.updateMediaSession(track);
             this.fetchRelatedRecommendations(track, true);
 
-            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
 
-            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+            if (isNativeApp) {
                 this.playbackMode = 'audio';
                 if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
                     try { this.ytPlayer.pauseVideo(); } catch (e) {}
                 }
-                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
                 const title = track.title || "Bandy's Music";
                 const artist = track.artist || "Bandy's Stream";
                 const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
                 window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                // Stop any native audio playback from previous song
-                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                    window.BandysNativeBridge.stopNativeAudio();
-                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                    window.BandysNativeBridge.pauseNativeAudio();
-                }
-
-                // 2. Putar YouTube Audio secara instan 0-delay
+                // Web Browser (Desktop / Laptop): Putar YouTube Audio secara instan 0-delay
                 this.playbackMode = 'youtube';
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                     this.ytPlayer.loadVideoById(track.id);
@@ -640,27 +605,20 @@ export const usePlayerStore = defineStore('player', {
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
-            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
 
-            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+            if (isNativeApp) {
                 this.playbackMode = 'audio';
                 if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
                     try { this.ytPlayer.pauseVideo(); } catch (e) {}
                 }
-                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
                 const title = track.title || "Bandy's Music";
                 const artist = track.artist || "Bandy's Stream";
                 const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
                 window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                // Stop any native audio playback from previous song
-                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                    window.BandysNativeBridge.stopNativeAudio();
-                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                    window.BandysNativeBridge.pauseNativeAudio();
-                }
-
-                // 2. Putar YouTube Audio secara instan 0-delay
+                // Web Browser: Putar YouTube Audio secara instan 0-delay
                 this.playbackMode = 'youtube';
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                     this.ytPlayer.loadVideoById(track.id);
@@ -821,6 +779,13 @@ export const usePlayerStore = defineStore('player', {
         },
 
         prevTrack() {
+            // Anti-bounce guard: abaikan jika dipanggil berulang dalam 600ms (misal trigger ganda dari OS / notifikasi)
+            const now = Date.now();
+            if (this.lastPrevTime && (now - this.lastPrevTime < 600)) {
+                return;
+            }
+            this.lastPrevTime = now;
+
             this.initYouTubeEngine();
 
             let currentSec = this.currentTime || 0;
@@ -906,27 +871,20 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
 
-            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+            if (isNativeApp) {
                 this.playbackMode = 'audio';
                 if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
                     try { this.ytPlayer.pauseVideo(); } catch (e) {}
                 }
-                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
                 const title = track.title || "Bandy's Music";
                 const artist = track.artist || "Bandy's Stream";
                 const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
                 window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                // Stop any native audio playback from previous song
-                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                    window.BandysNativeBridge.stopNativeAudio();
-                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                    window.BandysNativeBridge.pauseNativeAudio();
-                }
-
-                // 2. Putar YouTube Audio secara instan 0-delay
+                // Web Browser: Putar YouTube Audio secara instan 0-delay
                 this.playbackMode = 'youtube';
                 if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                     this.ytPlayer.loadVideoById(track.id);
@@ -1193,6 +1151,11 @@ export const usePlayerStore = defineStore('player', {
                 }
             } catch (e) {
                 console.warn('Native foreground bridge error:', e);
+            }
+
+            // If running in Native Android APK, media session and notification controls are handled 100% natively by MusicForegroundService
+            if (typeof window !== 'undefined' && window.BandysNativeBridge) {
+                return;
             }
 
             if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
