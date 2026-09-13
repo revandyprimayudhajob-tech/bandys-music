@@ -551,25 +551,13 @@ export const usePlayerStore = defineStore('player', {
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
-            this.isLoading = false;
+            this.isLoading = true;
             this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // JIKA DI DALAM NATIVE APK ANDROID:
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
-                // Jangan jalankan YouTube Iframe video agar WebView Chromium tidak kena background throttled!
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                this.fetchDirectAudioStream(track);
-                this.fetchRelatedRecommendations(track, true);
-                return;
-            }
-
-            // Web Browser Mode: Eksekusi YouTube Iframe
+            // 2. Putar YouTube IFrame secara instan agar suara langsung keluar tanpa jeda
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
@@ -596,23 +584,13 @@ export const usePlayerStore = defineStore('player', {
             this.fallbackRetries = 0;
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
-            this.isLoading = false;
+            this.isLoading = true;
             this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // JIKA DI DALAM NATIVE APK ANDROID:
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                this.fetchDirectAudioStream(track);
-                return;
-            }
-
-            // 2. Web Browser Mode
+            // 2. Putar YouTube IFrame secara instan
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
@@ -634,8 +612,8 @@ export const usePlayerStore = defineStore('player', {
             const targetPlaying = forceState !== undefined ? forceState : !this.isPlaying;
             this.isUserPaused = !targetPlaying;
 
-            // Native Android Bridge Handling
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio && window.BandysNativeBridge?.resumeNativeAudio) {
+            // Native Android Bridge Handling for Audio mode
+            if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio && window.BandysNativeBridge?.resumeNativeAudio) {
                 if (targetPlaying) {
                     window.BandysNativeBridge.resumeNativeAudio();
                     this.isPlaying = true;
@@ -842,17 +820,7 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // JIKA DI DALAM NATIVE APK ANDROID:
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                this.fetchDirectAudioStream(track);
-                return;
-            }
-
-            // 2. Web Browser Mode
+            // 2. Putar YouTube IFrame secara instan
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
@@ -931,7 +899,7 @@ export const usePlayerStore = defineStore('player', {
 
             let dur = this.duration || 0;
 
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.seekNativeAudio) {
+            if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.seekNativeAudio) {
                 if (dur > 0) {
                     const targetSecs = (pct / 100) * dur;
                     this.currentTime = targetSecs;
