@@ -45,6 +45,7 @@ export const usePlayerStore = defineStore('player', {
     },
     actions: {
         initYouTubeEngine() {
+            this.initNativeBridgeListener();
             this.initAudioEngine();
             this.initBackgroundAudioBridge();
             this.initVisibilityGuard();
@@ -66,6 +67,29 @@ export const usePlayerStore = defineStore('player', {
                     this.createPlayerInstance();
                 };
             }
+        },
+
+        initNativeBridgeListener() {
+            if (typeof window === 'undefined' || window._bandysBridgeInitialized) return;
+            window._bandysBridgeInitialized = true;
+
+            window.BandysNativeBridgeListener = (action, value) => {
+                if (action === 'play') {
+                    this.togglePlay(true);
+                } else if (action === 'pause') {
+                    this.togglePlay(false);
+                } else if (action === 'next') {
+                    this.nextTrack();
+                } else if (action === 'previous') {
+                    this.prevTrack();
+                } else if (action === 'seek') {
+                    if (this.duration > 0 && typeof value === 'number') {
+                        const sec = value / 1000;
+                        const pct = Math.max(0, Math.min(100, (sec / this.duration) * 100));
+                        this.seek(pct);
+                    }
+                }
+            };
         },
 
         initAudioEngine() {
@@ -386,6 +410,7 @@ export const usePlayerStore = defineStore('player', {
 
         startProgressTracker() {
             this.stopProgressTracker();
+            let lastNativeSync = 0;
             this.progressTimer = setInterval(() => {
                 if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
                     const curr = this.ytPlayer.getCurrentTime() || 0;
@@ -403,6 +428,13 @@ export const usePlayerStore = defineStore('player', {
                                 position: Math.min(curr, dur)
                             });
                         } catch (e) {}
+                    }
+
+                    // Throttle native position updates to every 1.5s
+                    const now = Date.now();
+                    if (now - lastNativeSync > 1500 && typeof window !== 'undefined' && window.BandysNativeBridge?.updatePosition) {
+                        lastNativeSync = now;
+                        window.BandysNativeBridge.updatePosition(curr, dur, this.isPlaying);
                     }
                 }
             }, 500);
@@ -535,15 +567,15 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.playVideo();
                 this.isPlaying = true;
                 this.playSilentAudioBridge();
-                if (this.currentTrack && typeof window !== 'undefined' && window.BandysNativeBridge?.startForegroundPlayback) {
-                    window.BandysNativeBridge.startForegroundPlayback(this.currentTrack.title || "Bandy's Music", this.currentTrack.artist || "Bandy's Stream");
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.updatePosition) {
+                    window.BandysNativeBridge.updatePosition(this.currentTime, this.duration, true);
                 }
             } else {
                 this.ytPlayer.pauseVideo();
                 this.isPlaying = false;
                 this.pauseSilentAudioBridge();
-                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopForegroundPlayback) {
-                    window.BandysNativeBridge.stopForegroundPlayback();
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.updatePosition) {
+                    window.BandysNativeBridge.updatePosition(this.currentTime, this.duration, false);
                 }
             }
         },
@@ -926,10 +958,22 @@ export const usePlayerStore = defineStore('player', {
         updateMediaSession(track) {
             if (!track) return;
 
-            // Trigger Native Android Foreground Service if running inside Capacitor Android APK
+            // Trigger Native Android MediaStyle Foreground Service if running inside Capacitor Android APK
             try {
-                if (typeof window !== 'undefined' && window.BandysNativeBridge && typeof window.BandysNativeBridge.startForegroundPlayback === 'function') {
-                    window.BandysNativeBridge.startForegroundPlayback(track.title || "Bandy's Music", track.artist || "Bandy's Stream");
+                if (typeof window !== 'undefined' && window.BandysNativeBridge) {
+                    const thumbUrl = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                    if (typeof window.BandysNativeBridge.updatePlayback === 'function') {
+                        window.BandysNativeBridge.updatePlayback(
+                            track.title || "Bandy's Music",
+                            track.artist || "Bandy's Stream",
+                            thumbUrl,
+                            this.duration || 0,
+                            this.currentTime || 0,
+                            this.isPlaying
+                        );
+                    } else if (typeof window.BandysNativeBridge.startForegroundPlayback === 'function') {
+                        window.BandysNativeBridge.startForegroundPlayback(track.title || "Bandy's Music", track.artist || "Bandy's Stream");
+                    }
                 }
             } catch (e) {
                 console.warn('Native foreground bridge error:', e);
