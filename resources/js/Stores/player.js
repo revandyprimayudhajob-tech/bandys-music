@@ -91,7 +91,7 @@ export const usePlayerStore = defineStore('player', {
                         this.seek(pct);
                     }
                 } else if (action === 'sync_pos') {
-                    if (typeof value === 'number' && this.duration > 0) {
+                    if (this.playbackMode === 'audio' && typeof value === 'number' && this.duration > 0) {
                         const sec = value / 1000;
                         this.currentTime = sec;
                         this.progress = Math.max(0, Math.min(100, (sec / this.duration) * 100));
