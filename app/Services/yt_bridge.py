@@ -30,23 +30,29 @@ def stream(video_id):
         'quiet': True,
         'skip_download': True,
         'no_warnings': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             formats = info.get('formats', [])
             
-            # Select pure audio-only streams
+            # 1. Prefer pure audio-only streams (e.g. itag 140 m4a)
             audio_formats = [f for f in formats if f.get('acodec') and f.get('acodec') != 'none' and (f.get('vcodec') == 'none' or not f.get('vcodec')) and f.get('url')]
             
             audio_url = None
             if audio_formats:
-                # Prefer m4a audio stream
                 m4a_formats = [f for f in audio_formats if f.get('ext') == 'm4a']
                 if m4a_formats:
                     audio_url = m4a_formats[-1]['url']
                 else:
                     audio_url = audio_formats[-1]['url']
+            
+            # 2. Fallback to progressive format with audio (e.g. itag 18 mp4) if SABR hid format 140
+            if not audio_url:
+                any_audio = [f for f in formats if f.get('acodec') and f.get('acodec') != 'none' and f.get('url')]
+                if any_audio:
+                    audio_url = any_audio[0]['url']
             
             if not audio_url:
                 audio_url = info.get('url')
