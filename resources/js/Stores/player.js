@@ -823,11 +823,17 @@ export const usePlayerStore = defineStore('player', {
         prevTrack() {
             this.initYouTubeEngine();
 
+            let currentSec = this.currentTime || 0;
+            if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+                const ytSec = this.ytPlayer.getCurrentTime();
+                if (ytSec > 0) currentSec = ytSec;
+            }
+
             // Aturan Standar Pemutar Musik Dunia (Spotify / Apple Music / YouTube Music):
             // Jika lagu sudah berjalan lebih dari 3 detik (misal di menit 1:25),
             // tekan Back/Prev akan MENGULANG LAGU DARI DETIK 0:00.
             // Jika ditekan di detik awal (<= 3 detik), baru mundur ke lagu sebelumnya!
-            if (this.currentTime > 3) {
+            if (currentSec > 3) {
                 this.seek(0);
                 if (!this.isPlaying) {
                     this.togglePlay(true);
@@ -999,6 +1005,19 @@ export const usePlayerStore = defineStore('player', {
             this.initYouTubeEngine();
             const pct = Math.max(0, Math.min(100, parseFloat(percent) || 0));
             this.progress = pct;
+
+            if (pct === 0) {
+                this.currentTime = 0;
+                this.progress = 0;
+                if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.seekNativeAudio) {
+                    window.BandysNativeBridge.seekNativeAudio(0);
+                } else if (this.playbackMode === 'audio' && this.audioEngine) {
+                    this.audioEngine.currentTime = 0;
+                } else if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+                    this.ytPlayer.seekTo(0, true);
+                }
+                return;
+            }
 
             let dur = this.duration || 0;
 
