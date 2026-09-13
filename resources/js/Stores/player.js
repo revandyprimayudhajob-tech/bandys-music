@@ -557,7 +557,19 @@ export const usePlayerStore = defineStore('player', {
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // 2. Langsung eksekusi pemutar YouTube secara instan tanpa menunggu fetch apapun
+            // JIKA DI DALAM NATIVE APK ANDROID:
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                // Jangan jalankan YouTube Iframe video agar WebView Chromium tidak kena background throttled!
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                this.fetchDirectAudioStream(track);
+                this.fetchRelatedRecommendations(track, true);
+                return;
+            }
+
+            // Web Browser Mode: Eksekusi YouTube Iframe
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
@@ -590,7 +602,17 @@ export const usePlayerStore = defineStore('player', {
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // 2. Langsung eksekusi pemutar YouTube secara instan
+            // JIKA DI DALAM NATIVE APK ANDROID:
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                this.fetchDirectAudioStream(track);
+                return;
+            }
+
+            // 2. Web Browser Mode
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
@@ -820,7 +842,17 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // 2. Langsung eksekusi pemutar YouTube secara instan
+            // JIKA DI DALAM NATIVE APK ANDROID:
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                this.fetchDirectAudioStream(track);
+                return;
+            }
+
+            // 2. Web Browser Mode
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
