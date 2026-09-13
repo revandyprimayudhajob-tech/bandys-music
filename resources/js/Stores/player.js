@@ -260,8 +260,8 @@ export const usePlayerStore = defineStore('player', {
             this.isVisibilityGuarded = true;
 
             const handleVisibilityChange = () => {
-                // Di aplikasi Android APK native, ExoPlayer berjalan terus secara independen di Foreground Service tanpa putus
-                if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                // Jika sedang mode direct audio native ExoPlayer, ExoPlayer berjalan independen
+                if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
                     return;
                 }
 
@@ -349,10 +349,16 @@ export const usePlayerStore = defineStore('player', {
                                 }
                                 this.stopProgressTracker();
                             } else {
-                                // Background auto-pause intervention by Chromium / OS -> Keep playing!
-                                this.playSilentAudioBridge();
-                                if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                                    this.ytPlayer.playVideo();
+                                // Background auto-pause intervention by Chromium / OS -> Throttled resume to prevent loop
+                                const now = Date.now();
+                                if (!this._lastAutoResume || (now - this._lastAutoResume > 2000)) {
+                                    this._lastAutoResume = now;
+                                    this.playSilentAudioBridge();
+                                    setTimeout(() => {
+                                        if (!this.isUserPaused && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                                            try { this.ytPlayer.playVideo(); } catch (e) {}
+                                        }
+                                    }, 300);
                                 }
                             }
                         } else if (event.data === window.YT.PlayerState.BUFFERING) {
@@ -556,30 +562,16 @@ export const usePlayerStore = defineStore('player', {
             this.updateMediaSession(track);
             this.fetchRelatedRecommendations(track, true);
 
-            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
-
-            if (isNativeApp) {
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
-                const title = track.title || "Bandy's Music";
-                const artist = track.artist || "Bandy's Stream";
-                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
+            // 2. Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
             } else {
-                // Web Browser (Desktop / Laptop): Putar YouTube Audio secara instan 0-delay
-                this.playbackMode = 'youtube';
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    this.pendingTrackId = track.id;
-                }
+                this.pendingTrackId = track.id;
             }
 
-            // 3. Precache direct stream secara senyap di background untuk persiapan background playback
+            // 3. Precache direct stream secara senyap di background
             this.precacheStream(track);
         },
 
@@ -605,30 +597,28 @@ export const usePlayerStore = defineStore('player', {
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
-            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
+            this.currentIndex = index;
+            this.currentTime = 0;
+            this.progress = 0;
+            this.duration = 0;
+            this.isPlaying = true;
+            this.isLoading = false;
+            this.isUserPaused = false;
+            this.fallbackRetries = 0;
+            this.triedAlternativeIds = [track.id];
 
-            if (isNativeApp) {
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
-                const title = track.title || "Bandy's Music";
-                const artist = track.artist || "Bandy's Stream";
-                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
+            this.addToHistory(track);
+            this.updateMediaSession(track);
+
+            // Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
             } else {
-                // Web Browser: Putar YouTube Audio secara instan 0-delay
-                this.playbackMode = 'youtube';
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    this.pendingTrackId = track.id;
-                }
+                this.pendingTrackId = track.id;
             }
 
-            // 3. Precache direct stream secara senyap di background
             this.precacheStream(track);
         },
 
@@ -871,30 +861,16 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            const isNativeApp = typeof window !== 'undefined' && Boolean(window.BandysNativeBridge?.playNativeStream);
-
-            if (isNativeApp) {
-                this.playbackMode = 'audio';
-                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
-                }
-                const streamUrl = `https://bandys-music-production.up.railway.app/api/stream/audio/${track.id}`;
-                const title = track.title || "Bandy's Music";
-                const artist = track.artist || "Bandy's Stream";
-                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
+            // Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
             } else {
-                // Web Browser: Putar YouTube Audio secara instan 0-delay
-                this.playbackMode = 'youtube';
-                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                    this.ytPlayer.loadVideoById(track.id);
-                    this.ytPlayer.playVideo();
-                } else {
-                    this.pendingTrackId = track.id;
-                }
+                this.pendingTrackId = track.id;
             }
 
-            // 3. Precache direct stream secara senyap di background
+            // Precache direct stream secara senyap di background
             this.precacheStream(track);
         },
 
