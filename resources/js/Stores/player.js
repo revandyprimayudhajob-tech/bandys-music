@@ -29,6 +29,7 @@ export const usePlayerStore = defineStore('player', {
         silentAudio: null,
         wakeLock: null,
         isVisibilityGuarded: false,
+        isUserPaused: false,
     }),
     getters: {
         currentTrack(state) {
@@ -194,20 +195,25 @@ export const usePlayerStore = defineStore('player', {
             if (this.isVisibilityGuarded || typeof document === 'undefined') return;
             this.isVisibilityGuarded = true;
 
-            document.addEventListener('visibilitychange', () => {
+            const handleVisibilityChange = () => {
                 if (document.visibilityState === 'hidden') {
-                    // Ketika user beralih ke aplikasi lain (Home) atau mematikan layar HP
-                    if (this.isPlaying) {
+                    // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
+                    if (!this.isUserPaused && this.isPlaying) {
                         this.playSilentAudioBridge();
                         if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
+                            setTimeout(() => {
+                                if (!this.isUserPaused && this.isPlaying && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                                    this.ytPlayer.playVideo();
+                                }
+                            }, 300);
                         } else if (this.playbackMode === 'audio' && this.audioEngine) {
                             this.audioEngine.play().catch(() => {});
                         }
                     }
                 } else {
                     // Ketika user kembali ke dalam aplikasi
-                    if (this.isPlaying) {
+                    if (!this.isUserPaused && this.isPlaying) {
                         if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
                         } else if (this.playbackMode === 'audio' && this.audioEngine) {
@@ -215,7 +221,13 @@ export const usePlayerStore = defineStore('player', {
                         }
                     }
                 }
-            });
+            };
+
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            if (typeof window !== 'undefined') {
+                window.addEventListener('pagehide', handleVisibilityChange);
+                window.addEventListener('blur', handleVisibilityChange);
+            }
         },
 
         createPlayerInstance() {
@@ -262,13 +274,21 @@ export const usePlayerStore = defineStore('player', {
                             }
                             this.startProgressTracker();
                         } else if (event.data === window.YT.PlayerState.PAUSED) {
-                            this.isPlaying = false;
-                            this.pauseSilentAudioBridge();
-                            this.releaseWakeLock();
-                            if ('mediaSession' in navigator) {
-                                navigator.mediaSession.playbackState = 'paused';
+                            if (this.isUserPaused) {
+                                this.isPlaying = false;
+                                this.pauseSilentAudioBridge();
+                                this.releaseWakeLock();
+                                if ('mediaSession' in navigator) {
+                                    navigator.mediaSession.playbackState = 'paused';
+                                }
+                                this.stopProgressTracker();
+                            } else {
+                                // Background auto-pause intervention by Chromium / OS -> Keep playing!
+                                this.playSilentAudioBridge();
+                                if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                                    this.ytPlayer.playVideo();
+                                }
                             }
-                            this.stopProgressTracker();
                         } else if (event.data === window.YT.PlayerState.BUFFERING) {
                             this.isLoading = true;
                         } else if (event.data === window.YT.PlayerState.ENDED) {
@@ -434,6 +454,7 @@ export const usePlayerStore = defineStore('player', {
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
             this.isLoading = false;
+            this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
@@ -465,6 +486,7 @@ export const usePlayerStore = defineStore('player', {
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
             this.isLoading = false;
+            this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);
@@ -485,22 +507,23 @@ export const usePlayerStore = defineStore('player', {
                 return;
             }
 
+            const targetPlaying = forceState !== undefined ? forceState : !this.isPlaying;
+            this.isUserPaused = !targetPlaying;
+
             if (this.playbackMode === 'audio' && this.audioEngine) {
-                if (forceState !== undefined) {
-                    if (forceState) {
-                        this.audioEngine.play().catch(() => {});
-                        this.isPlaying = true;
-                    } else {
-                        this.audioEngine.pause();
-                        this.isPlaying = false;
+                if (targetPlaying) {
+                    this.audioEngine.play().catch(() => {});
+                    this.isPlaying = true;
+                    this.playSilentAudioBridge();
+                    if (this.currentTrack && typeof window !== 'undefined' && window.BandysNativeBridge?.startForegroundPlayback) {
+                        window.BandysNativeBridge.startForegroundPlayback(this.currentTrack.title || "Bandy's Music", this.currentTrack.artist || "Bandy's Stream");
                     }
                 } else {
-                    if (this.isPlaying) {
-                        this.audioEngine.pause();
-                        this.isPlaying = false;
-                    } else {
-                        this.audioEngine.play().catch(() => {});
-                        this.isPlaying = true;
+                    this.audioEngine.pause();
+                    this.isPlaying = false;
+                    this.pauseSilentAudioBridge();
+                    if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopForegroundPlayback) {
+                        window.BandysNativeBridge.stopForegroundPlayback();
                     }
                 }
                 return;
@@ -508,13 +531,19 @@ export const usePlayerStore = defineStore('player', {
 
             if (!this.ytPlayer || typeof this.ytPlayer.getPlayerState !== 'function') return;
 
-            if (forceState !== undefined) {
-                forceState ? this.ytPlayer.playVideo() : this.ytPlayer.pauseVideo();
+            if (targetPlaying) {
+                this.ytPlayer.playVideo();
+                this.isPlaying = true;
+                this.playSilentAudioBridge();
+                if (this.currentTrack && typeof window !== 'undefined' && window.BandysNativeBridge?.startForegroundPlayback) {
+                    window.BandysNativeBridge.startForegroundPlayback(this.currentTrack.title || "Bandy's Music", this.currentTrack.artist || "Bandy's Stream");
+                }
             } else {
-                if (this.isPlaying) {
-                    this.ytPlayer.pauseVideo();
-                } else {
-                    this.ytPlayer.playVideo();
+                this.ytPlayer.pauseVideo();
+                this.isPlaying = false;
+                this.pauseSilentAudioBridge();
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopForegroundPlayback) {
+                    window.BandysNativeBridge.stopForegroundPlayback();
                 }
             }
         },
@@ -663,6 +692,7 @@ export const usePlayerStore = defineStore('player', {
             this.triedAlternativeIds = [track.id];
             this.isPlaying = true;
             this.isLoading = false;
+            this.isUserPaused = false;
 
             this.addToHistory(track);
             this.updateMediaSession(track);

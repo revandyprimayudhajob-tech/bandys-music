@@ -310,8 +310,8 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
                                 :src="highResThumbnail || track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
                                 alt="Cover Art" 
                                 @error="onImageError"
-                                class="w-full h-full object-cover select-none transition-all duration-700 ease-out"
-                                :class="player.isPlaying ? 'scale-100' : 'scale-95 opacity-90'"
+                                class="w-full h-full object-cover select-none transition-all duration-500 ease-out scale-100"
+                                :class="player.isPlaying ? 'opacity-100' : 'opacity-90'"
                             />
                             
                             <!-- Subtle overlay gradient -->
