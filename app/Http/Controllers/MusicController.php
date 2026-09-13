@@ -163,10 +163,9 @@ class MusicController extends Controller
             curl_setopt($ch, CURLOPT_URL, $targetUrl);
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-            curl_setopt($ch, CURLOPT_BUFFERSIZE, 64 * 1024);
+            curl_setopt($ch, CURLOPT_BUFFERSIZE, 32 * 1024);
 
             curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) {
                 $len = strlen($header);
@@ -181,6 +180,15 @@ class MusicController extends Controller
                     http_response_code((int) $matches[1]);
                 }
                 return $len;
+            });
+
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($curl, $data) {
+                echo $data;
+                if (ob_get_level() > 0) {
+                    @ob_flush();
+                }
+                flush();
+                return strlen($data);
             });
 
             curl_exec($ch);
