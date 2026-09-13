@@ -6,6 +6,15 @@ import MiniPlayer from '@/Components/MiniPlayer.vue';
 import FullscreenPlayer from '@/Components/FullscreenPlayer.vue';
 import SplashIntro from '@/Components/SplashIntro.vue';
 
+const props = defineProps({
+    activeTab: {
+        type: String,
+        default: ''
+    }
+});
+
+const emit = defineEmits(['change-tab']);
+
 const player = usePlayerStore();
 const page = usePage();
 
@@ -212,15 +221,27 @@ onUnmounted(() => {
             <div class="flex items-center gap-3">
                 <!-- Desktop Navigation Links -->
                 <div class="hidden md:flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10">
-                    <Link href="/" class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5" :class="page.url === '/' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                    <button 
+                        @click="props.activeTab ? emit('change-tab', 'explore') : $inertia.visit('/')" 
+                        class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer" 
+                        :class="(props.activeTab === 'explore' || page.url === '/') ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+                    >
                         <i class="ri-home-5-line"></i> Explore
-                    </Link>
-                    <Link href="/favorites" class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5" :class="page.url.startsWith('/favorites') ? 'bg-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                    </button>
+                    <button 
+                        @click="props.activeTab ? emit('change-tab', 'favorites') : $inertia.visit('/favorites')" 
+                        class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer" 
+                        :class="(props.activeTab === 'favorites' || page.url.startsWith('/favorites')) ? 'bg-pink-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+                    >
                         <i class="ri-heart-3-line"></i> Favorit
-                    </Link>
-                    <Link href="/history" class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5" :class="page.url.startsWith('/history') ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                    </button>
+                    <button 
+                        @click="props.activeTab ? emit('change-tab', 'history') : $inertia.visit('/history')" 
+                        class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer" 
+                        :class="(props.activeTab === 'history' || page.url.startsWith('/history')) ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-white'"
+                    >
                         <i class="ri-history-line"></i> Riwayat
-                    </Link>
+                    </button>
                 </div>
 
                 <!-- Google Account Button & Dropdown Container -->
@@ -468,20 +489,32 @@ onUnmounted(() => {
 
         <!-- Bottom Navigation Bar (Visible on mobile/tablet screens) -->
         <nav class="fixed bottom-0 left-0 right-0 max-w-md md:max-w-3xl lg:max-w-5xl xl:max-w-6xl mx-auto h-16 bg-[#0a0c16]/95 backdrop-blur-2xl border-t border-white/10 flex items-center justify-around z-30 px-2 md:hidden">
-            <Link href="/" class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition" :class="page.url === '/' ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'">
-                <i class="text-xl" :class="page.url === '/' ? 'ri-home-5-fill' : 'ri-home-5-line'"></i>
+            <button 
+                @click="props.activeTab ? emit('change-tab', 'explore') : $inertia.visit('/')" 
+                class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition cursor-pointer" 
+                :class="(props.activeTab === 'explore' || page.url === '/') ? 'text-purple-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+            >
+                <i class="text-xl" :class="(props.activeTab === 'explore' || page.url === '/') ? 'ri-home-5-fill' : 'ri-home-5-line'"></i>
                 <span>Explore</span>
-            </Link>
+            </button>
 
-            <Link href="/favorites" class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition" :class="page.url.startsWith('/favorites') ? 'text-pink-400 font-bold' : 'text-slate-400 hover:text-slate-200'">
-                <i class="text-xl" :class="page.url.startsWith('/favorites') ? 'ri-heart-3-fill' : 'ri-heart-3-line'"></i>
+            <button 
+                @click="props.activeTab ? emit('change-tab', 'favorites') : $inertia.visit('/favorites')" 
+                class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition cursor-pointer" 
+                :class="(props.activeTab === 'favorites' || page.url.startsWith('/favorites')) ? 'text-pink-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+            >
+                <i class="text-xl" :class="(props.activeTab === 'favorites' || page.url.startsWith('/favorites')) ? 'ri-heart-3-fill' : 'ri-heart-3-line'"></i>
                 <span>Favorit</span>
-            </Link>
+            </button>
 
-            <Link href="/history" class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition" :class="page.url.startsWith('/history') ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'">
-                <i class="text-xl" :class="page.url.startsWith('/history') ? 'ri-history-fill' : 'ri-history-line'"></i>
+            <button 
+                @click="props.activeTab ? emit('change-tab', 'history') : $inertia.visit('/history')" 
+                class="flex flex-col items-center gap-1 text-xs font-semibold py-1 px-4 transition cursor-pointer" 
+                :class="(props.activeTab === 'history' || page.url.startsWith('/history')) ? 'text-cyan-400 font-bold' : 'text-slate-400 hover:text-slate-200'"
+            >
+                <i class="text-xl" :class="(props.activeTab === 'history' || page.url.startsWith('/history')) ? 'ri-history-fill' : 'ri-history-line'"></i>
                 <span>Riwayat</span>
-            </Link>
+            </button>
         </nav>
     </div>
 </template>

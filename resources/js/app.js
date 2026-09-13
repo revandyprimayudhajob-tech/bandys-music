@@ -18,10 +18,7 @@ createInertiaApp({
             .use(pinia)
             .mount(el);
     },
-    progress: {
-        color: '#a855f7',
-        showSpinner: true,
-    },
+    progress: false,
 });
 
 // Register Service Worker for PWA
