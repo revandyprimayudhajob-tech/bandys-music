@@ -296,11 +296,11 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
         </div>
 
         <!-- Dynamic Middle Area: Disc OR Tab Content with Smooth Transition -->
-        <div class="flex-1 flex flex-col justify-center my-2 min-h-0 overflow-hidden relative">
+        <div class="flex-1 flex flex-col justify-center my-1 min-h-0 overflow-hidden relative">
             <Transition name="tab-fade" mode="out-in">
                 <!-- 1. Modern High Definition Square Cover Art Mode (Default) -->
-                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-1 sm:py-3">
-                    <div class="w-72 h-72 sm:w-84 sm:h-84 md:w-96 md:h-96 max-w-[82vw] max-h-[35vh] sm:max-h-[40vh] aspect-square relative group">
+                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-1 sm:py-2">
+                    <div class="w-60 h-60 sm:w-72 sm:h-72 md:w-80 md:h-80 max-w-[76vw] max-h-[28vh] sm:max-h-[34vh] aspect-square relative group">
                         <!-- Ambient Dynamic Glow behind artwork -->
                         <div class="absolute -inset-2 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500"></div>
                         
@@ -615,170 +615,173 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
             </Transition>
         </div>
 
-        <!-- 3 Quick Menus: Berikutnya, Lirik, Terkait -->
-        <div class="grid grid-cols-3 gap-2 my-2">
-            <!-- Berikutnya -->
-            <button 
-                @click="setTab('queue')" 
-                class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
-                :class="activeTab === 'queue' ? 'bg-purple-600/30 text-purple-300 border-purple-500/50 shadow-md shadow-purple-900/30' : 'glass-card text-slate-400 border-white/5 hover:text-white'"
-            >
-                <i class="ri-play-list-2-line"></i> Berikutnya
-            </button>
-
-            <!-- Lirik (Auto-disabled & Grayed out if unavailable) -->
-            <button 
-                @click="setTab('lyrics')" 
-                :disabled="!hasLyrics"
-                class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
-                :class="[
-                    !hasLyrics 
-                        ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-600 border-transparent' 
-                        : activeTab === 'lyrics' 
-                            ? 'bg-pink-600/30 text-pink-300 border-pink-500/50 shadow-md shadow-pink-900/30' 
-                            : 'glass-card text-slate-400 border-white/5 hover:text-white'
-                ]"
-            >
-                <i class="ri-file-text-line"></i> Lirik
-            </button>
-
-            <!-- Terkait -->
-            <button 
-                @click="setTab('related')" 
-                class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
-                :class="activeTab === 'related' ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-900/30' : 'glass-card text-slate-400 border-white/5 hover:text-white'"
-            >
-                <i class="ri-sparkling-line"></i> Terkait
-            </button>
-        </div>
-
-        <!-- Track Info & Controls Bottom Area -->
-        <div class="space-y-4 pt-1">
-            <!-- Metadata -->
-            <div class="flex items-center justify-between gap-4">
-                <div class="flex-1 min-w-0">
-                    <h2 class="text-lg font-black text-white truncate">{{ track?.title || 'Judul Lagu' }}</h2>
-                    <p class="text-xs font-medium text-slate-400 truncate">{{ track?.artist || 'Bandy\'s Music' }}</p>
-                </div>
+        <!-- Elevated Bottom Section (Circled by User: Quick Menus + Info + Controls) -->
+        <div class="w-full space-y-3 pb-8 sm:pb-12 mb-4">
+            <!-- 3 Quick Menus: Berikutnya, Lirik, Terkait -->
+            <div class="grid grid-cols-3 gap-2">
+                <!-- Berikutnya -->
                 <button 
-                    @click="player.toggleFavorite(track)" 
-                    class="text-2xl p-1 text-slate-400 transition hover:scale-110 active:scale-95"
+                    @click="setTab('queue')" 
+                    class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
+                    :class="activeTab === 'queue' ? 'bg-purple-600/30 text-purple-300 border-purple-500/50 shadow-md shadow-purple-900/30' : 'glass-card text-slate-400 border-white/5 hover:text-white'"
                 >
-                    <i :class="player.isCurrentFavorite ? 'ri-heart-3-fill text-pink-500' : 'ri-heart-3-line'"></i>
+                    <i class="ri-play-list-2-line"></i> Berikutnya
                 </button>
-            </div>
 
-            <!-- Timeline Slider with Active White Progress Fill -->
-            <div class="space-y-1.5 select-none py-1">
-                <div 
-                    @click="onSliderClick"
-                    class="relative w-full h-3 flex items-center cursor-pointer group"
-                >
-                    <!-- Base Track (Gray Bar) -->
-                    <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                        <!-- Played Active Track (Pure White Line) -->
-                        <div class="h-full bg-white rounded-full transition-[width] duration-75" :style="{ width: `${player.progress}%` }"></div>
-                    </div>
-                    
-                    <!-- Native Range Input for Dragging -->
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        step="0.1"
-                        :value="player.progress" 
-                        @input="onSeek"
-                        @change="onSeek"
-                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    />
-                    
-                    <!-- Scrubber Thumb -->
-                    <div 
-                        class="absolute w-4 h-4 bg-white rounded-full shadow-lg shadow-white/60 -translate-x-1/2 pointer-events-none transition-all duration-75 group-hover:scale-125"
-                        :style="{ left: `${player.progress}%` }"
-                    ></div>
-                </div>
-                <div class="flex justify-between text-[11px] font-semibold text-slate-400 px-0.5">
-                    <span>{{ formatTime(player.currentTime) }}</span>
-                    <span>{{ formatTime(player.duration) }}</span>
-                </div>
-            </div>
-
-            <!-- Playback Controls -->
-            <div class="flex items-center justify-between px-2">
+                <!-- Lirik (Auto-disabled & Grayed out if unavailable) -->
                 <button 
-                    @click="player.toggleShuffle" 
-                    class="text-xl p-2 transition" 
-                    :class="player.isShuffle ? 'text-purple-400' : 'text-slate-500'"
-                >
-                    <i class="ri-shuffle-line"></i>
-                </button>
-
-                <button @click="player.prevTrack" class="text-3xl text-white hover:text-purple-300 active:scale-90 transition">
-                    <i class="ri-skip-back-fill"></i>
-                </button>
-
-                <button 
-                    @click="player.togglePlay()" 
-                    class="w-16 h-16 rounded-full gradient-brand text-white flex items-center justify-center text-3xl shadow-xl shadow-purple-600/40 active:scale-95 transition"
-                >
-                    <i :class="player.isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
-                </button>
-
-                <button @click="player.nextTrack" class="text-3xl text-white hover:text-purple-300 active:scale-90 transition">
-                    <i class="ri-skip-forward-fill"></i>
-                </button>
-
-                <button 
-                    @click="player.toggleRepeat" 
-                    class="relative text-xl p-2 transition flex items-center justify-center rounded-xl" 
+                    @click="setTab('lyrics')" 
+                    :disabled="!hasLyrics"
+                    class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
                     :class="[
-                        player.repeatMode !== 'off' 
-                            ? 'text-purple-400 bg-purple-500/10 shadow-sm shadow-purple-500/20' 
-                            : 'text-slate-500 hover:text-slate-300'
+                        !hasLyrics 
+                            ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-600 border-transparent' 
+                            : activeTab === 'lyrics' 
+                                ? 'bg-pink-600/30 text-pink-300 border-pink-500/50 shadow-md shadow-pink-900/30' 
+                                : 'glass-card text-slate-400 border-white/5 hover:text-white'
                     ]"
-                    :title="
-                        player.playlist.length > 1
-                            ? (player.repeatMode === 'all' 
-                                ? 'Loop Seluruh Antrean' 
-                                : player.repeatMode === 'one' 
-                                    ? 'Loop 1 Lagu di Antrean' 
-                                    : player.repeatMode === 'shuffle' 
-                                        ? 'Random Antrean Saja' 
-                                        : 'Mode Putar Biasa')
-                            : (player.repeatMode === 'one' ? 'Loop Lagu Ini Terus-Menerus' : 'Ulangi Lagu (Mati)')
-                    "
                 >
-                    <!-- Ikon Berdasarkan Mode -->
-                    <template v-if="player.repeatMode === 'one'">
-                        <!-- Loop 1 Lagu: Ikon Kotak Putar dengan Titik/Dot di Tengahnya Sesuai Request -->
-                        <div class="relative flex items-center justify-center">
-                            <i class="ri-repeat-line text-cyan-400 text-2xl animate-pulse"></i>
-                            <!-- Dot Titik Tepat di Tengah Kotak -->
-                            <span class="absolute w-1.5 h-1.5 bg-cyan-300 rounded-full shadow-sm shadow-cyan-300 pointer-events-none"></span>
-                        </div>
-                    </template>
-                    <template v-else-if="player.repeatMode === 'all'">
-                        <!-- Loop Seluruh Antrean -->
-                        <i class="ri-repeat-line text-purple-400 text-2xl"></i>
-                        <!-- Badge Penanda Antrean -->
-                        <span class="absolute -top-1 -right-1 text-[8px] font-black bg-purple-600 text-white px-1 py-0.2 rounded-full border border-purple-400 shadow">
-                            ALL
-                        </span>
-                    </template>
-                    <template v-else-if="player.repeatMode === 'shuffle'">
-                        <!-- Random Acak Khusus Antrean Saja -->
-                        <i class="ri-shuffle-line text-pink-400 text-2xl"></i>
-                        <!-- Badge Penanda Shuffle Queue -->
-                        <span class="absolute -top-1 -right-1 text-[8px] font-black bg-pink-600 text-white px-1 py-0.2 rounded-full border border-pink-400 shadow">
-                            Q
-                        </span>
-                    </template>
-                    <template v-else>
-                        <!-- Off / Mati -->
-                        <i class="ri-repeat-line text-2xl"></i>
-                    </template>
+                    <i class="ri-file-text-line"></i> Lirik
                 </button>
+
+                <!-- Terkait -->
+                <button 
+                    @click="setTab('related')" 
+                    class="py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition border"
+                    :class="activeTab === 'related' ? 'bg-cyan-600/30 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-900/30' : 'glass-card text-slate-400 border-white/5 hover:text-white'"
+                >
+                    <i class="ri-sparkling-line"></i> Terkait
+                </button>
+            </div>
+
+            <!-- Track Info & Controls Area -->
+            <div class="space-y-3.5">
+                <!-- Metadata -->
+                <div class="flex items-center justify-between gap-4">
+                    <div class="flex-1 min-w-0">
+                        <h2 class="text-lg font-black text-white truncate">{{ track?.title || 'Judul Lagu' }}</h2>
+                        <p class="text-xs font-medium text-slate-400 truncate">{{ track?.artist || 'Bandy\'s Music' }}</p>
+                    </div>
+                    <button 
+                        @click="player.toggleFavorite(track)" 
+                        class="text-2xl p-1 text-slate-400 transition hover:scale-110 active:scale-95"
+                    >
+                        <i :class="player.isCurrentFavorite ? 'ri-heart-3-fill text-pink-500' : 'ri-heart-3-line'"></i>
+                    </button>
+                </div>
+
+                <!-- Timeline Slider with Active White Progress Fill -->
+                <div class="space-y-1 select-none">
+                    <div 
+                        @click="onSliderClick"
+                        class="relative w-full h-3 flex items-center cursor-pointer group"
+                    >
+                        <!-- Base Track (Gray Bar) -->
+                        <div class="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                            <!-- Played Active Track (Pure White Line) -->
+                            <div class="h-full bg-white rounded-full transition-[width] duration-75" :style="{ width: `${player.progress}%` }"></div>
+                        </div>
+                        
+                        <!-- Native Range Input for Dragging -->
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            step="0.1"
+                            :value="player.progress" 
+                            @input="onSeek"
+                            @change="onSeek"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        />
+                        
+                        <!-- Scrubber Thumb -->
+                        <div 
+                            class="absolute w-4 h-4 bg-white rounded-full shadow-lg shadow-white/60 -translate-x-1/2 pointer-events-none transition-all duration-75 group-hover:scale-125"
+                            :style="{ left: `${player.progress}%` }"
+                        ></div>
+                    </div>
+                    <div class="flex justify-between text-[11px] font-semibold text-slate-400 px-0.5">
+                        <span>{{ formatTime(player.currentTime) }}</span>
+                        <span>{{ formatTime(player.duration) }}</span>
+                    </div>
+                </div>
+
+                <!-- Playback Controls -->
+                <div class="flex items-center justify-between px-2 pt-1">
+                    <button 
+                        @click="player.toggleShuffle" 
+                        class="text-xl p-2 transition" 
+                        :class="player.isShuffle ? 'text-purple-400' : 'text-slate-500'"
+                    >
+                        <i class="ri-shuffle-line"></i>
+                    </button>
+
+                    <button @click="player.prevTrack" class="text-3xl text-white hover:text-purple-300 active:scale-90 transition">
+                        <i class="ri-skip-back-fill"></i>
+                    </button>
+
+                    <button 
+                        @click="player.togglePlay()" 
+                        class="w-16 h-16 rounded-full gradient-brand text-white flex items-center justify-center text-3xl shadow-xl shadow-purple-600/40 active:scale-95 transition"
+                    >
+                        <i :class="player.isPlaying ? 'ri-pause-fill' : 'ri-play-fill'"></i>
+                    </button>
+
+                    <button @click="player.nextTrack" class="text-3xl text-white hover:text-purple-300 active:scale-90 transition">
+                        <i class="ri-skip-forward-fill"></i>
+                    </button>
+
+                    <button 
+                        @click="player.toggleRepeat" 
+                        class="relative text-xl p-2 transition flex items-center justify-center rounded-xl" 
+                        :class="[
+                            player.repeatMode !== 'off' 
+                                ? 'text-purple-400 bg-purple-500/10 shadow-sm shadow-purple-500/20' 
+                                : 'text-slate-500 hover:text-slate-300'
+                        ]"
+                        :title="
+                            player.playlist.length > 1
+                                ? (player.repeatMode === 'all' 
+                                    ? 'Loop Seluruh Antrean' 
+                                    : player.repeatMode === 'one' 
+                                        ? 'Loop 1 Lagu di Antrean' 
+                                        : player.repeatMode === 'shuffle' 
+                                            ? 'Random Antrean Saja' 
+                                            : 'Mode Putar Biasa')
+                                : (player.repeatMode === 'one' ? 'Loop Lagu Ini Terus-Menerus' : 'Ulangi Lagu (Mati)')
+                        "
+                    >
+                        <!-- Ikon Berdasarkan Mode -->
+                        <template v-if="player.repeatMode === 'one'">
+                            <!-- Loop 1 Lagu: Ikon Kotak Putar dengan Titik/Dot di Tengahnya Sesuai Request -->
+                            <div class="relative flex items-center justify-center">
+                                <i class="ri-repeat-line text-cyan-400 text-2xl animate-pulse"></i>
+                                <!-- Dot Titik Tepat di Tengah Kotak -->
+                                <span class="absolute w-1.5 h-1.5 bg-cyan-300 rounded-full shadow-sm shadow-cyan-300 pointer-events-none"></span>
+                            </div>
+                        </template>
+                        <template v-else-if="player.repeatMode === 'all'">
+                            <!-- Loop Seluruh Antrean -->
+                            <i class="ri-repeat-line text-purple-400 text-2xl"></i>
+                            <!-- Badge Penanda Antrean -->
+                            <span class="absolute -top-1 -right-1 text-[8px] font-black bg-purple-600 text-white px-1 py-0.2 rounded-full border border-purple-400 shadow">
+                                ALL
+                            </span>
+                        </template>
+                        <template v-else-if="player.repeatMode === 'shuffle'">
+                            <!-- Random Acak Khusus Antrean Saja -->
+                            <i class="ri-shuffle-line text-pink-400 text-2xl"></i>
+                            <!-- Badge Penanda Shuffle Queue -->
+                            <span class="absolute -top-1 -right-1 text-[8px] font-black bg-pink-600 text-white px-1 py-0.2 rounded-full border border-pink-400 shadow">
+                                Q
+                            </span>
+                        </template>
+                        <template v-else>
+                            <!-- Off / Mati -->
+                            <i class="ri-repeat-line text-2xl"></i>
+                        </template>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
