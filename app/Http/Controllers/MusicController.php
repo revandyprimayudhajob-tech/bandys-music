@@ -125,7 +125,9 @@ class MusicController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Direct stream could not be resolved'
+            'message' => 'Direct stream could not be resolved',
+            'error' => $streamData['error'] ?? null,
+            'raw' => $output ?? null,
         ], 404);
     }
 
