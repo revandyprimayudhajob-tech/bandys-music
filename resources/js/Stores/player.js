@@ -127,6 +127,7 @@ export const usePlayerStore = defineStore('player', {
                     }
                 });
 
+                let lastNativeAudioSync = 0;
                 audio.addEventListener('timeupdate', () => {
                     if (this.playbackMode === 'audio') {
                         const curr = audio.currentTime || 0;
@@ -135,6 +136,23 @@ export const usePlayerStore = defineStore('player', {
                         if (dur > 0 && !isNaN(dur)) {
                             this.duration = dur;
                             this.progress = (curr / dur) * 100;
+                        }
+
+                        // Sync position state to OS Lockscreen / Notification Shade
+                        if ('mediaSession' in navigator && dur > 0 && typeof navigator.mediaSession.setPositionState === 'function') {
+                            try {
+                                navigator.mediaSession.setPositionState({
+                                    duration: dur,
+                                    playbackRate: 1,
+                                    position: Math.min(curr, dur)
+                                });
+                            } catch (e) {}
+                        }
+
+                        const now = Date.now();
+                        if (now - lastNativeAudioSync > 1200 && typeof window !== 'undefined' && window.BandysNativeBridge?.updatePosition) {
+                            lastNativeAudioSync = now;
+                            window.BandysNativeBridge.updatePosition(curr, dur, this.isPlaying);
                         }
                     }
                 });
@@ -382,7 +400,7 @@ export const usePlayerStore = defineStore('player', {
             });
         },
 
-        playDirectAudioStream(streamUrl, duration = null) {
+        playDirectAudioStream(streamUrl, duration = null, startPosition = 0) {
             this.initAudioEngine();
             this.playbackMode = 'audio';
             this.stopProgressTracker();
@@ -395,14 +413,17 @@ export const usePlayerStore = defineStore('player', {
 
             if (this.audioEngine) {
                 this.audioEngine.src = streamUrl;
-                this.audioEngine.currentTime = 0;
-                this.currentTime = 0;
+                if (startPosition > 0) {
+                    this.audioEngine.currentTime = startPosition;
+                    this.currentTime = startPosition;
+                }
                 if (duration) this.duration = duration;
 
                 this.audioEngine.play().then(() => {
                     this.isPlaying = true;
                     this.isLoading = false;
                     this.acquireWakeLock();
+                    this.updateMediaSession(this.currentTrack);
                     if ('mediaSession' in navigator) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -410,6 +431,22 @@ export const usePlayerStore = defineStore('player', {
                     console.warn('AudioEngine play error:', err);
                     this.isLoading = false;
                 });
+            }
+        },
+
+        async fetchDirectAudioStream(track) {
+            if (!track || !track.id) return;
+            const targetId = track.id;
+            try {
+                const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
+                    const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
+                    const dur = data.duration || this.duration;
+                    this.playDirectAudioStream(data.streamUrl, dur, currentPos);
+                }
+            } catch (e) {
+                console.warn('Direct audio stream fetch note:', e);
             }
         },
 
@@ -503,7 +540,8 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.playVideo();
             }
 
-            // 3. Background fetch rekomendasi & audio bridge secara paralel
+            // 3. Background fetch audio stream & rekomendasi secara paralel
+            this.fetchDirectAudioStream(track);
             this.fetchRelatedRecommendations(track, true);
         },
 
@@ -534,6 +572,9 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
             }
+
+            // 3. Background fetch audio stream
+            this.fetchDirectAudioStream(track);
         },
 
         togglePlay(forceState) {
@@ -749,6 +790,9 @@ export const usePlayerStore = defineStore('player', {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
             }
+
+            // 3. Background fetch audio stream
+            this.fetchDirectAudioStream(track);
         },
 
         async fetchMoreRadioTracks() {

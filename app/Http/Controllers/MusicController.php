@@ -89,8 +89,16 @@ class MusicController extends Controller
     public function stream(string $videoId): JsonResponse
     {
         $pythonScript = base_path('app/Services/yt_bridge.py');
-        $command = "python " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId);
+        $pythonBinary = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
+        $command = $pythonBinary . " " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId) . " 2>&1";
         $output = shell_exec($command);
+        
+        // Extract JSON if warnings exist
+        $jsonStart = strpos($output, '{');
+        if ($jsonStart !== false) {
+            $output = substr($output, $jsonStart);
+        }
+        
         $result = json_decode($output, true);
 
         if (!empty($result['streamUrl'])) {
@@ -99,6 +107,7 @@ class MusicController extends Controller
                 'streamUrl' => $result['streamUrl'],
                 'title' => $result['title'] ?? '',
                 'artist' => $result['artist'] ?? '',
+                'duration' => $result['duration'] ?? 0,
             ]);
         }
 
