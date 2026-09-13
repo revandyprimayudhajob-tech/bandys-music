@@ -89,7 +89,10 @@ class MusicController extends Controller
     public function stream(string $videoId, Request $request): JsonResponse
     {
         $cacheKey = 'yt_stream_' . $videoId;
-        $streamData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 10800, function () use ($videoId) {
+        $streamData = \Illuminate\Support\Facades\Cache::get($cacheKey);
+
+        if (empty($streamData['streamUrl'])) {
+            \Illuminate\Support\Facades\Cache::forget($cacheKey);
             $pythonScript = base_path('app/Services/yt_bridge.py');
             $pythonBinary = PHP_OS_FAMILY === 'Windows' ? 'python' : 'python3';
             $command = $pythonBinary . " " . escapeshellarg($pythonScript) . " stream " . escapeshellarg($videoId) . " 2>&1";
@@ -100,8 +103,11 @@ class MusicController extends Controller
                 $output = substr($output, $jsonStart);
             }
             
-            return json_decode($output, true);
-        });
+            $streamData = json_decode($output, true);
+            if (!empty($streamData['streamUrl'])) {
+                \Illuminate\Support\Facades\Cache::put($cacheKey, $streamData, 10800);
+            }
+        }
 
         if (!empty($streamData['streamUrl'])) {
             $baseUrl = $request->getSchemeAndHttpHost();
