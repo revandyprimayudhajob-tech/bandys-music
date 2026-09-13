@@ -86,7 +86,7 @@ class MusicController extends Controller
         ]);
     }
 
-    public function stream(string $videoId): JsonResponse
+    public function stream(string $videoId, Request $request): JsonResponse
     {
         $cacheKey = 'yt_stream_' . $videoId;
         $streamData = \Illuminate\Support\Facades\Cache::remember($cacheKey, 10800, function () use ($videoId) {
@@ -104,9 +104,10 @@ class MusicController extends Controller
         });
 
         if (!empty($streamData['streamUrl'])) {
+            $baseUrl = $request->getSchemeAndHttpHost();
             return response()->json([
                 'success' => true,
-                'streamUrl' => url('/api/stream/audio/' . $videoId),
+                'streamUrl' => $baseUrl . '/api/stream/audio/' . $videoId,
                 'directUrl' => $streamData['streamUrl'],
                 'title' => $streamData['title'] ?? '',
                 'artist' => $streamData['artist'] ?? '',

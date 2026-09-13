@@ -6,14 +6,26 @@ import SongCard from '@/Components/SongCard.vue';
 const player = usePlayerStore();
 const track = computed(() => player.currentTrack);
 
-// Compute High-Definition Thumbnail (maxresdefault / sddefault fallback)
+// Compute High-Definition Thumbnail (Ultra HD 800x800 for YTM or maxresdefault 1280x720)
 const highResThumbnail = computed(() => {
     if (!track.value) return '';
+    const rawThumb = track.value.thumbnail || '';
+    
+    // 1. YouTube Music / Google CDN Album Art -> Request Ultra-Sharp 800x800
+    if (rawThumb.includes('googleusercontent.com') || rawThumb.includes('ggpht.com')) {
+        if (rawThumb.includes('=w')) {
+            return rawThumb.replace(/=w\d+-h\d+[^?&]*/, '=w800-h800-l90-rj');
+        }
+        return `${rawThumb}=w800-h800-l90-rj`;
+    }
+    
+    // 2. YouTube Video Maxres HD (1280x720)
     if (track.value.id) {
         return `https://i.ytimg.com/vi/${track.value.id}/maxresdefault.jpg`;
     }
-    if (track.value.thumbnail) {
-        return track.value.thumbnail.replace('hqdefault.jpg', 'maxresdefault.jpg').replace('mqdefault.jpg', 'maxresdefault.jpg');
+    
+    if (rawThumb) {
+        return rawThumb.replace('hqdefault.jpg', 'maxresdefault.jpg').replace('mqdefault.jpg', 'maxresdefault.jpg');
     }
     return '';
 });
@@ -22,15 +34,17 @@ const onImageError = (e) => {
     if (!track.value) return;
     const currentSrc = e.target.src;
     const id = track.value.id;
+    const rawThumb = track.value.thumbnail;
+    
     if (currentSrc.includes('maxresdefault.jpg')) {
-        // Fallback 1: sddefault (Standard Definition)
+        // Fallback 1: sddefault (640x480 standard definition)
         e.target.src = `https://i.ytimg.com/vi/${id}/sddefault.jpg`;
     } else if (currentSrc.includes('sddefault.jpg')) {
-        // Fallback 2: hqdefault (High Quality default)
+        // Fallback 2: hqdefault (480x360)
         e.target.src = `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
-    } else if (track.value.thumbnail && currentSrc !== track.value.thumbnail) {
+    } else if (rawThumb && currentSrc !== rawThumb) {
         // Fallback 3: original track thumbnail
-        e.target.src = track.value.thumbnail;
+        e.target.src = rawThumb;
     }
 };
 
@@ -299,18 +313,18 @@ watch([() => track.value?.id, () => player.playCount], ([newId]) => {
         <div class="flex-1 flex flex-col justify-center my-1 min-h-0 overflow-hidden relative">
             <Transition name="tab-fade" mode="out-in">
                 <!-- 1. Modern High Definition Square Cover Art Mode (Default) -->
-                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-1 sm:py-2">
-                    <div class="w-60 h-60 sm:w-72 sm:h-72 md:w-80 md:h-80 max-w-[76vw] max-h-[28vh] sm:max-h-[34vh] aspect-square relative group">
+                <div v-if="activeTab === 'player'" key="tab-player" class="flex-1 flex items-center justify-center py-2">
+                    <div class="w-72 h-72 sm:w-80 sm:h-80 md:w-96 md:h-96 max-w-[84vw] max-h-[36vh] aspect-square relative group">
                         <!-- Ambient Dynamic Glow behind artwork -->
                         <div class="absolute -inset-2 bg-gradient-to-tr from-purple-600/40 via-cyan-500/30 to-pink-500/40 rounded-3xl blur-2xl opacity-75 group-hover:opacity-100 transition duration-500"></div>
                         
                         <!-- Square Artwork Container -->
                         <div class="relative w-full h-full rounded-2xl sm:rounded-3xl overflow-hidden bg-[#13172c] border border-white/20 shadow-2xl shadow-black/80 flex items-center justify-center">
                             <img 
-                                :src="track?.thumbnail || highResThumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
+                                :src="highResThumbnail || track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`" 
                                 alt="Cover Art" 
                                 @error="onImageError"
-                                class="w-full h-full object-cover select-none transition-all duration-500 ease-out scale-[1.18]"
+                                class="w-full h-full object-cover select-none transition-all duration-500 ease-out scale-[1.08]"
                                 :class="player.isPlaying ? 'opacity-100' : 'opacity-90'"
                             />
                             
