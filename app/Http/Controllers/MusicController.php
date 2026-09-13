@@ -107,8 +107,9 @@ class MusicController extends Controller
             $baseUrl = $request->getSchemeAndHttpHost();
             return response()->json([
                 'success' => true,
-                'streamUrl' => $baseUrl . '/api/stream/audio/' . $videoId,
+                'streamUrl' => $streamData['streamUrl'],
                 'directUrl' => $streamData['streamUrl'],
+                'proxyUrl' => $baseUrl . '/api/stream/audio/' . $videoId,
                 'title' => $streamData['title'] ?? '',
                 'artist' => $streamData['artist'] ?? '',
                 'duration' => $streamData['duration'] ?? 0,
@@ -145,40 +146,7 @@ class MusicController extends Controller
             return response('Stream not found', 404);
         }
 
-        $targetUrl = $streamData['streamUrl'];
-        $rangeHeader = $request->header('Range');
-
-        $headers = [
-            'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        ];
-        if ($rangeHeader) {
-            $headers['Range'] = $rangeHeader;
-        }
-
-        return response()->stream(function () use ($targetUrl, $headers) {
-            $ctx = stream_context_create([
-                'http' => [
-                    'header' => implode("\r\n", array_map(fn($k, $v) => "$k: $v", array_keys($headers), $headers)),
-                    'timeout' => 30,
-                    'follow_location' => 1,
-                ],
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                ]
-            ]);
-            $fp = @fopen($targetUrl, 'rb', false, $ctx);
-            if ($fp) {
-                while (!feof($fp)) {
-                    echo fread($fp, 65536);
-                    flush();
-                }
-                fclose($fp);
-            }
-        }, 200, [
-            'Content-Type' => 'audio/mp4',
-            'Accept-Ranges' => 'bytes',
-            'Cache-Control' => 'public, max-age=86400',
-        ]);
+        // Redirect directly to high-speed CDN stream for native HTTP Range byte-seeking
+        return redirect()->away($streamData['streamUrl']);
     }
 }

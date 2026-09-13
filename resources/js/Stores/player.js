@@ -32,6 +32,7 @@ export const usePlayerStore = defineStore('player', {
         wakeLock: null,
         isVisibilityGuarded: false,
         isUserPaused: false,
+        pendingTrackId: null,
     }),
     getters: {
         currentTrack(state) {
@@ -250,15 +251,18 @@ export const usePlayerStore = defineStore('player', {
             const handleVisibilityChange = () => {
                 if (document.visibilityState === 'hidden') {
                     // Ketika user beralih ke aplikasi lain (Home / WA) atau mematikan layar HP
-                    if (!this.isUserPaused && this.isPlaying) {
+                    if (!this.isUserPaused && this.isPlaying && this.currentTrack) {
                         let currentPos = this.currentTime;
                         if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
                             const ytSec = this.ytPlayer.getCurrentTime();
                             if (ytSec > 0) currentPos = ytSec;
                         }
 
-                        // Jika berjalan di Android APK & stream URL siap -> serahkan audio ke Native Android Foreground Service
-                        if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream && this.currentStreamUrl) {
+                        // Stream URL: gunakan yang sudah ter-precache ATAU URL endpoint streaming permanen
+                        const streamUrl = this.currentStreamUrl || `${window.location.origin}/api/stream/audio/${this.currentTrack.id}`;
+
+                        // Jika berjalan di Android APK -> serahkan audio ke Native Android Foreground Service
+                        if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
                             this.playbackMode = 'audio';
                             if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
                                 try { this.ytPlayer.pauseVideo(); } catch (e) {}
@@ -267,7 +271,7 @@ export const usePlayerStore = defineStore('player', {
                             const title = track?.title || "Bandy's Music";
                             const artist = track?.artist || "Bandy's Stream";
                             const thumb = track?.thumbnail || `https://i.ytimg.com/vi/${track?.id}/hqdefault.jpg`;
-                            window.BandysNativeBridge.playNativeStream(this.currentStreamUrl, title, artist, thumb, this.currentStreamDuration || this.duration, currentPos);
+                            window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, this.currentStreamDuration || this.duration, currentPos);
                         } else {
                             this.playSilentAudioBridge();
                             if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
@@ -321,6 +325,11 @@ export const usePlayerStore = defineStore('player', {
                 events: {
                     onReady: () => {
                         this.isApiReady = true;
+                        if (this.pendingTrackId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                            this.ytPlayer.loadVideoById(this.pendingTrackId);
+                            this.ytPlayer.playVideo();
+                            this.pendingTrackId = null;
+                        }
                     },
                     onStateChange: (event) => {
                         if (this.playbackMode !== 'youtube') return;
@@ -381,7 +390,7 @@ export const usePlayerStore = defineStore('player', {
                                 const res = await fetch(`/api/stream/${current.id}`);
                                 const data = await res.json();
                                 if (data && data.success && data.streamUrl) {
-                                    this.playDirectAudioStream(data.streamUrl, data.duration);
+                                    this.playDirectAudioStream(data.streamUrl, data.duration, this.currentTime);
                                     return;
                                 }
                             } catch (e) {
@@ -557,11 +566,20 @@ export const usePlayerStore = defineStore('player', {
             this.updateMediaSession(track);
             this.fetchRelatedRecommendations(track, true);
 
+            // Stop any native audio playback from previous song
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                window.BandysNativeBridge.stopNativeAudio();
+            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                window.BandysNativeBridge.pauseNativeAudio();
+            }
+
             // 2. Putar YouTube Audio secara instan 0-delay
             this.playbackMode = 'youtube';
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
+            } else {
+                this.pendingTrackId = track.id;
             }
 
             // 3. Precache direct stream secara senyap di background untuk persiapan background playback
@@ -590,6 +608,13 @@ export const usePlayerStore = defineStore('player', {
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
+            // Stop any native audio playback from previous song
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                window.BandysNativeBridge.stopNativeAudio();
+            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                window.BandysNativeBridge.pauseNativeAudio();
+            }
+
             // 1. INSTANT STATE UPDATE (0.001 detik langsung pindah tanpa delay)
             this.currentTime = 0;
             this.duration = 0;
@@ -610,6 +635,8 @@ export const usePlayerStore = defineStore('player', {
             if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
                 this.ytPlayer.loadVideoById(track.id);
                 this.ytPlayer.playVideo();
+            } else {
+                this.pendingTrackId = track.id;
             }
 
             // 3. Precache direct stream secara senyap di background
@@ -835,8 +862,24 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // 2. Putar langsung dengan single engine yang konsisten
-            this.loadAndPlayTrack(track);
+            // Stop any native audio playback from previous song
+            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                window.BandysNativeBridge.stopNativeAudio();
+            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                window.BandysNativeBridge.pauseNativeAudio();
+            }
+
+            // 2. Putar YouTube Audio secara instan 0-delay
+            this.playbackMode = 'youtube';
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                this.ytPlayer.loadVideoById(track.id);
+                this.ytPlayer.playVideo();
+            } else {
+                this.pendingTrackId = track.id;
+            }
+
+            // 3. Precache direct stream secara senyap di background
+            this.precacheStream(track);
         },
 
         async fetchMoreRadioTracks() {
