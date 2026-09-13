@@ -93,8 +93,10 @@ export const usePlayerStore = defineStore('player', {
                 } else if (action === 'sync_pos') {
                     if (this.playbackMode === 'audio' && typeof value === 'number' && this.duration > 0) {
                         const sec = value / 1000;
-                        this.currentTime = sec;
-                        this.progress = Math.max(0, Math.min(100, (sec / this.duration) * 100));
+                        if (sec > 0 || this.currentTime < 2) {
+                            this.currentTime = sec;
+                            this.progress = Math.max(0, Math.min(100, (sec / this.duration) * 100));
+                        }
                     }
                 }
             };
@@ -251,9 +253,15 @@ export const usePlayerStore = defineStore('player', {
                     if (!this.isUserPaused && this.isPlaying) {
                         this.playSilentAudioBridge();
                         
+                        // Ambil posisi detik secara real-time dari YouTube player atau state aktif
+                        let currentPos = this.currentTime;
+                        if (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+                            const ytSec = this.ytPlayer.getCurrentTime();
+                            if (ytSec > 0) currentPos = ytSec;
+                        }
+                        
                         // Jika stream URL sudah siap, beralih ke Native Android Service untuk background playback tanpa jeda
                         if (this.currentStreamUrl && this.playbackMode !== 'audio') {
-                            const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
                             this.playDirectAudioStream(this.currentStreamUrl, this.currentStreamDuration || this.duration, currentPos);
                         } else if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
