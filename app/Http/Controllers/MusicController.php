@@ -105,11 +105,12 @@ class MusicController extends Controller
 
         if (!empty($streamData['streamUrl'])) {
             $baseUrl = $request->getSchemeAndHttpHost();
+            $proxyUrl = $baseUrl . '/api/stream/audio/' . $videoId;
             return response()->json([
                 'success' => true,
-                'streamUrl' => $streamData['streamUrl'],
+                'streamUrl' => $proxyUrl,
                 'directUrl' => $streamData['streamUrl'],
-                'proxyUrl' => $baseUrl . '/api/stream/audio/' . $videoId,
+                'proxyUrl' => $proxyUrl,
                 'title' => $streamData['title'] ?? '',
                 'artist' => $streamData['artist'] ?? '',
                 'duration' => $streamData['duration'] ?? 0,
@@ -146,7 +147,49 @@ class MusicController extends Controller
             return response('Stream not found', 404);
         }
 
-        // Redirect directly to high-speed CDN stream for native HTTP Range byte-seeking
-        return redirect()->away($streamData['streamUrl']);
+        $targetUrl = $streamData['streamUrl'];
+        $rangeHeader = $request->header('Range');
+
+        return response()->stream(function () use ($targetUrl, $rangeHeader) {
+            $ch = curl_init();
+            $headers = [
+                'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept: */*',
+            ];
+            if ($rangeHeader) {
+                $headers[] = 'Range: ' . $rangeHeader;
+            }
+
+            curl_setopt($ch, CURLOPT_URL, $targetUrl);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_BUFFERSIZE, 64 * 1024);
+
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($curl, $header) {
+                $len = strlen($header);
+                $parts = explode(':', $header, 2);
+                if (count($parts) === 2) {
+                    $name = strtolower(trim($parts[0]));
+                    $val = trim($parts[1]);
+                    if (in_array($name, ['content-type', 'content-length', 'content-range', 'accept-ranges'])) {
+                        header($header, true);
+                    }
+                } elseif (preg_match('#HTTP/\d\.\d\s+(\d+)#', $header, $matches)) {
+                    http_response_code((int) $matches[1]);
+                }
+                return $len;
+            });
+
+            curl_exec($ch);
+            curl_close($ch);
+        }, 200, [
+            'Content-Type' => 'audio/mp4',
+            'Accept-Ranges' => 'bytes',
+            'Access-Control-Allow-Origin' => '*',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
     }
 }

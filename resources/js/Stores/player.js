@@ -258,8 +258,8 @@ export const usePlayerStore = defineStore('player', {
                             if (ytSec > 0) currentPos = ytSec;
                         }
 
-                        // Stream URL: gunakan yang sudah ter-precache ATAU URL endpoint streaming permanen
-                        const streamUrl = this.currentStreamUrl || `${window.location.origin}/api/stream/audio/${this.currentTrack.id}`;
+                        // Stream URL: gunakan proxy audio stream agar tidak terkena 403 Google CDN
+                        const streamUrl = `${window.location.origin}/api/stream/audio/${this.currentTrack.id}`;
 
                         // Jika berjalan di Android APK -> serahkan audio ke Native Android Foreground Service
                         if (typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
@@ -280,9 +280,19 @@ export const usePlayerStore = defineStore('player', {
                         }
                     }
                 } else {
-                    // Ketika user kembali ke dalam aplikasi
+                    // Ketika user kembali ke dalam aplikasi (foreground)
                     if (!this.isUserPaused && this.isPlaying) {
-                        if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                        if (this.playbackMode === 'audio' && typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                            // Hentikan native audio dan lanjutkan dengan YouTube player di detik yang sama
+                            window.BandysNativeBridge.stopNativeAudio();
+                            this.playbackMode = 'youtube';
+                            if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+                                try {
+                                    this.ytPlayer.seekTo(this.currentTime, true);
+                                    this.ytPlayer.playVideo();
+                                } catch (e) {}
+                            }
+                        } else if (this.playbackMode === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
                             this.ytPlayer.playVideo();
                         }
                     }
@@ -566,20 +576,34 @@ export const usePlayerStore = defineStore('player', {
             this.updateMediaSession(track);
             this.fetchRelatedRecommendations(track, true);
 
-            // Stop any native audio playback from previous song
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                window.BandysNativeBridge.stopNativeAudio();
-            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                window.BandysNativeBridge.pauseNativeAudio();
-            }
+            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
-            // 2. Putar YouTube Audio secara instan 0-delay
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
+            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const title = track.title || "Bandy's Music";
+                const artist = track.artist || "Bandy's Stream";
+                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                this.pendingTrackId = track.id;
+                // Stop any native audio playback from previous song
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                    window.BandysNativeBridge.stopNativeAudio();
+                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                    window.BandysNativeBridge.pauseNativeAudio();
+                }
+
+                // 2. Putar YouTube Audio secara instan 0-delay
+                this.playbackMode = 'youtube';
+                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                    this.ytPlayer.loadVideoById(track.id);
+                    this.ytPlayer.playVideo();
+                } else {
+                    this.pendingTrackId = track.id;
+                }
             }
 
             // 3. Precache direct stream secara senyap di background untuk persiapan background playback
@@ -608,35 +632,34 @@ export const usePlayerStore = defineStore('player', {
             this.initBackgroundAudioBridge();
             this.playSilentAudioBridge();
 
-            // Stop any native audio playback from previous song
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                window.BandysNativeBridge.stopNativeAudio();
-            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                window.BandysNativeBridge.pauseNativeAudio();
-            }
+            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
-            // 1. INSTANT STATE UPDATE (0.001 detik langsung pindah tanpa delay)
-            this.currentTime = 0;
-            this.duration = 0;
-            this.progress = 0;
-            this.currentIndex = index;
-            this.shouldRefreshRelated = false;
-            this.fallbackRetries = 0;
-            this.triedAlternativeIds = [track.id];
-            this.isPlaying = true;
-            this.isLoading = false;
-            this.isUserPaused = false;
-
-            this.addToHistory(track);
-            this.updateMediaSession(track);
-
-            // 2. Putar YouTube Audio secara instan 0-delay
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
+            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const title = track.title || "Bandy's Music";
+                const artist = track.artist || "Bandy's Stream";
+                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                this.pendingTrackId = track.id;
+                // Stop any native audio playback from previous song
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                    window.BandysNativeBridge.stopNativeAudio();
+                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                    window.BandysNativeBridge.pauseNativeAudio();
+                }
+
+                // 2. Putar YouTube Audio secara instan 0-delay
+                this.playbackMode = 'youtube';
+                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                    this.ytPlayer.loadVideoById(track.id);
+                    this.ytPlayer.playVideo();
+                } else {
+                    this.pendingTrackId = track.id;
+                }
             }
 
             // 3. Precache direct stream secara senyap di background
@@ -862,20 +885,34 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // Stop any native audio playback from previous song
-            if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
-                window.BandysNativeBridge.stopNativeAudio();
-            } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
-                window.BandysNativeBridge.pauseNativeAudio();
-            }
+            const isBackground = typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
-            // 2. Putar YouTube Audio secara instan 0-delay
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
+            if (isBackground && typeof window !== 'undefined' && window.BandysNativeBridge?.playNativeStream) {
+                this.playbackMode = 'audio';
+                if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+                    try { this.ytPlayer.pauseVideo(); } catch (e) {}
+                }
+                const streamUrl = `${window.location.origin}/api/stream/audio/${track.id}`;
+                const title = track.title || "Bandy's Music";
+                const artist = track.artist || "Bandy's Stream";
+                const thumb = track.thumbnail || `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                window.BandysNativeBridge.playNativeStream(streamUrl, title, artist, thumb, 0, 0);
             } else {
-                this.pendingTrackId = track.id;
+                // Stop any native audio playback from previous song
+                if (typeof window !== 'undefined' && window.BandysNativeBridge?.stopNativeAudio) {
+                    window.BandysNativeBridge.stopNativeAudio();
+                } else if (typeof window !== 'undefined' && window.BandysNativeBridge?.pauseNativeAudio) {
+                    window.BandysNativeBridge.pauseNativeAudio();
+                }
+
+                // 2. Putar YouTube Audio secara instan 0-delay
+                this.playbackMode = 'youtube';
+                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                    this.ytPlayer.loadVideoById(track.id);
+                    this.ytPlayer.playVideo();
+                } else {
+                    this.pendingTrackId = track.id;
+                }
             }
 
             // 3. Precache direct stream secara senyap di background
