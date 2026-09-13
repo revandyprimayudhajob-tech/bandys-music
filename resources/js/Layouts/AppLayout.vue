@@ -164,7 +164,7 @@ const installApp = async () => {
         }
         deferredPrompt.value = null;
     } else {
-        alert("Untuk menginstall aplikasi:\n1. Buka browser Chrome di HP Anda\n2. Tekan menu titik 3 di kanan atas\n3. Pilih 'Instal Aplikasi' atau 'Tambahkan ke Layar Utama'");
+        window.location.href = '/BANDYS_MUSIC.apk';
     }
 };
 
