@@ -27,20 +27,30 @@ def search(query):
 def stream(video_id):
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best',
         'quiet': True,
         'skip_download': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web', 'mweb']}}
+        'no_warnings': True,
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            audio_url = info.get('url')
-            if not audio_url:
-                formats = info.get('formats', [])
-                audio_formats = [f for f in formats if f.get('acodec') != 'none' and f.get('vcodec') == 'none']
-                if audio_formats:
+            formats = info.get('formats', [])
+            
+            # Select pure audio-only streams
+            audio_formats = [f for f in formats if f.get('acodec') and f.get('acodec') != 'none' and (f.get('vcodec') == 'none' or not f.get('vcodec')) and f.get('url')]
+            
+            audio_url = None
+            if audio_formats:
+                # Prefer m4a audio stream
+                m4a_formats = [f for f in audio_formats if f.get('ext') == 'm4a']
+                if m4a_formats:
+                    audio_url = m4a_formats[-1]['url']
+                else:
                     audio_url = audio_formats[-1]['url']
+            
+            if not audio_url:
+                audio_url = info.get('url')
+
             return {
                 "streamUrl": audio_url,
                 "title": info.get("title"),
