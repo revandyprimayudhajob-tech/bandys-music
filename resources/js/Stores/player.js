@@ -466,28 +466,6 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        async fetchDirectAudioStream(track) {
-            if (!track || !track.id) return;
-            const targetId = track.id;
-            try {
-                const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
-                const data = await res.json();
-                if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
-                    const streamUrl = data.streamUrl.startsWith('http') ? data.streamUrl : `${window.location.origin}${data.streamUrl}`;
-                    const dur = data.duration || this.duration;
-                    this.currentStreamUrl = streamUrl;
-                    this.currentStreamDuration = dur;
-
-                    // Jika user saat ini sedang di luar aplikasi (latar belakang), langsung aktifkan native stream
-                    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && this.isPlaying && !this.isUserPaused) {
-                        const currentPos = this.currentTime || (this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0);
-                        this.playDirectAudioStream(streamUrl, dur, currentPos);
-                    }
-                }
-            } catch (e) {
-                console.warn('Direct audio stream fetch note:', e);
-            }
-        },
 
         startProgressTracker() {
             this.stopProgressTracker();
@@ -549,6 +527,34 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
+        async loadAndPlayTrack(track) {
+            if (!track || !track.id) return;
+            const targetId = track.id;
+            try {
+                const res = await fetch(`/api/stream/${encodeURIComponent(targetId)}`);
+                const data = await res.json();
+                if (data && data.success && data.streamUrl && this.currentTrack?.id === targetId) {
+                    const streamUrl = data.streamUrl.startsWith('http') ? data.streamUrl : `${window.location.origin}${data.streamUrl}`;
+                    const dur = data.duration || this.duration;
+                    this.currentStreamUrl = streamUrl;
+                    this.currentStreamDuration = dur;
+                    this.playDirectAudioStream(streamUrl, dur, 0);
+                    return;
+                }
+            } catch (e) {
+                console.warn('Stream fetch note, falling back to YouTube:', e);
+            }
+
+            // Fallback to YouTube IFrame if stream is unavailable
+            if (this.currentTrack?.id === targetId) {
+                this.playbackMode = 'youtube';
+                if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+                    this.ytPlayer.loadVideoById(targetId);
+                    this.ytPlayer.playVideo();
+                }
+            }
+        },
+
         playTrack(track, list = null) {
             this.initYouTubeEngine();
             this.initAudioEngine();
@@ -571,17 +577,10 @@ export const usePlayerStore = defineStore('player', {
 
             this.addToHistory(track);
             this.updateMediaSession(track);
-
-            // 2. Putar YouTube IFrame secara instan agar suara langsung keluar tanpa jeda
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
-            }
-
-            // 3. Background fetch audio stream & rekomendasi secara paralel
-            this.fetchDirectAudioStream(track);
             this.fetchRelatedRecommendations(track, true);
+
+            // 2. Putar langsung dengan single engine yang konsisten
+            this.loadAndPlayTrack(track);
         },
 
         playTrackFromQueue(track, index) {
@@ -605,15 +604,8 @@ export const usePlayerStore = defineStore('player', {
             this.addToHistory(track);
             this.updateMediaSession(track);
 
-            // 2. Putar YouTube IFrame secara instan
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
-            }
-
-            // 3. Background fetch audio stream
-            this.fetchDirectAudioStream(track);
+            // 2. Putar langsung dengan single engine yang konsisten
+            this.loadAndPlayTrack(track);
         },
 
         togglePlay(forceState) {
@@ -835,15 +827,8 @@ export const usePlayerStore = defineStore('player', {
                 this.currentIndex = this.playlist.length - 1;
             }
 
-            // 2. Putar YouTube IFrame secara instan
-            this.playbackMode = 'youtube';
-            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-                this.ytPlayer.loadVideoById(track.id);
-                this.ytPlayer.playVideo();
-            }
-
-            // 3. Background fetch audio stream
-            this.fetchDirectAudioStream(track);
+            // 2. Putar langsung dengan single engine yang konsisten
+            this.loadAndPlayTrack(track);
         },
 
         async fetchMoreRadioTracks() {
